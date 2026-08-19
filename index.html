@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cost Variance TXT to Multi-Sheet Excel Converter</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8fafc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: white;
+      padding: 2.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      width: 480px;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 0;
+      color: #1e293b;
+    }
+    p {
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+    .dropzone {
+      border: 2px dashed #94a3b8;
+      border-radius: 8px;
+      padding: 2rem 1rem;
+      margin: 1.5rem 0;
+      cursor: pointer;
+      background: #f1f5f9;
+      transition: all 0.2s;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    #status {
+      font-size: 0.9rem;
+      color: #2563eb;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Cost Variance Report Converter</h2>
+  <p>Drop your <code>.txt</code> file to convert and download the formatted multi-sheet <code>.xlsx</code> file.</p>
+  
+  <div class="dropzone" id="dropzone">
+    <span id="dropText">Drag & Drop .txt file here or <u>Browse</u></span>
+    <input type="file" id="fileInput" accept=".txt" style="display:none;" />
+  </div>
+
+  <div id="status">Loading Python runtime in browser...</div>
+</div>
+
+<script>
+  let pyodide = null;
+  const statusEl = document.getElementById("status");
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("fileInput");
+
+  // Initialize Pyodide & openpyxl
+  async function initPyodide() {
+    pyodide = await loadPyodide();
+    await pyodide.loadPackage("micropip");
+    const micropip = pyodide.pyimport("micropip");
+    await micropip.install("openpyxl");
+    statusEl.textContent = "Ready! Drop your .txt file.";
+    statusEl.style.color = "#16a34a";
+  }
+  initPyodide();
+
+  // Drag and Drop Listeners
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  async function handleFile(file) {
+    if (!pyodide) {
+      alert("Python environment is still loading. Please wait a few seconds.");
+      return;
+    }
+    if (!file.name.endsWith(".txt")) {
+      alert("Please upload a valid .txt file.");
+      return;
+    }
+
+    statusEl.textContent = "Processing and creating Excel workbook...";
+    statusEl.style.color = "#2563eb";
+
+    const text = await file.text();
+    pyodide.globals.set("raw_text", text);
+
+    const pythonScript = `
+import re
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import io
+
+blocks = re.split(r'\\x0c|(?=SAIL/RSP\\s+COST VARIANCE REPORT)', raw_text)
+parsed_sheets = []
+
+for block in blocks:
+    block = block.strip()
+    if not block or 'COST VARIANCE REPORT' not in block:
+        continue
+    
+    cc_match = re.search(r'CC CODE\\s*:\\s*(\\w+)\\s+CC NAME\\s*:\\s*([^\\n\\r]+)', block)
+    if not cc_match:
+        continue
+    
+    cc_code = cc_match.group(1).strip()
+    cc_name = cc_match.group(2).strip()
+    
+    period_match = re.search(r'Variance Period1\\s*:\\s*([^\\n\\r]+?)\\s+Period2\\s*:\\s*([^\\n\\r]+)', block)
+    period1 = period_match.group(1).strip() if period_match else ""
+    period2 = period_match.group(2).strip() if period_match else ""
+    
+    prep_match = re.search(r'PREPARED ON\\s+([^\\n\\r]+)', block)
+    prepared_on = prep_match.group(1).strip() if prep_match else ""
+    
+    prod_match = re.search(r'PRODUCTION\\s+1st Periiod\\s*:\\s*([^\\n\\r]+?)\\s+2nd Period\\s*:\\s*([^\\n\\r]+)', block)
+    prod_p1 = prod_match.group(1).strip() if prod_match else ""
+    prod_p2 = prod_match.group(2).strip() if prod_match else ""
+    
+    parsed_sheets.append({
+        'cc_code': cc_code,
+        'cc_name': cc_name,
+        'period1': period1,
+        'period2': period2,
+        'prepared_on': prepared_on,
+        'prod_p1': prod_p1,
+        'prod_p2': prod_p2,
+        'raw_block': block
+    })
+
+wb = openpyxl.Workbook()
+default_sheet = wb.active
+used_sheet_names = set()
+
+for idx, item in enumerate(parsed_sheets):
+    cc_code = item['cc_code']
+    cc_name = item['cc_name']
+    raw_sheet_name = f"{cc_code} {cc_name}"
+    safe_name = re.sub(r'[\\\\/*?:\\[\\]]', '', raw_sheet_name).strip()[:30]
+    
+    base_name = safe_name
+    counter = 1
+    while safe_name in used_sheet_names:
+        safe_name = f"{base_name[:27]}_{counter}"
+        counter += 1
+    used_sheet_names.add(safe_name)
+    
+    if idx == 0:
+        ws = default_sheet
+        ws.title = safe_name
+    else:
+        ws = wb.create_sheet(title=safe_name)
+        
+    ws.views.sheetView[0].showGridLines = True
+    
+    meta_text = (
+        f"Variance Period1 : {item['period1']}    Period2 : {item['period2']}\\n"
+        f"CC CODE : {item['cc_code']}    CC NAME : {item['cc_name']}\\n"
+        f"PREPARED ON {item['prepared_on']}\\n"
+        f"PRODUCTION 1st Period : {item['prod_p1']}    2nd Period : {item['prod_p2']}"
+    )
+    
+    ws['A1'] = "REPORT METADATA"
+    ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
+    ws['A2'] = meta_text
+    ws['A2'].font = Font(name="Calibri", size=10)
+    ws['A2'].alignment = Alignment(wrap_text=True, vertical="top")
+    ws.row_dimensions[2].height = 65
+    ws.merge_cells('A2:M2')
+    
+    fill_meta = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
+    for r in range(1, 3):
+        for c in range(1, 14):
+            ws.cell(row=r, column=c).fill = fill_meta
+            
+    lines = item['raw_block'].split('\\n')
+    table_rows = []
+    start_table = False
+    
+    for line in lines:
+        line_clean = line.strip()
+        if "Element" in line_clean and "V-Rate" in line_clean:
+            start_table = True
+            continue
+        if not start_table or not line_clean or line_clean.startswith('---'):
+            continue
+            
+        if line_clean.startswith('CUM.') or line_clean.startswith('STOCK') or line_clean.startswith('TOTAL COST'):
+            parts = re.split(r'\\s{2,}|\\t+', line_clean)
+            label = parts[0]
+            nums = re.findall(r'-?\\d+\\.?\\d*|NaN', line_clean[len(label):])
+            row = [label, "", "", nums[0] if len(nums)>0 else "", nums[1] if len(nums)>1 else "",
+                   "", "", nums[2] if len(nums)>2 else "", nums[3] if len(nums)>3 else "",
+                   "", "", nums[4] if len(nums)>4 else "", nums[5] if len(nums)>5 else ""]
+            table_rows.append(('summary', row))
+            continue
+            
+        if "||" not in line:
+            cat_name = line_clean.replace("##", "").replace("!!", "").strip()
+            if cat_name:
+                table_rows.append(('category', [cat_name] + [""] * 12))
+            continue
+            
+        parts = line.split('||')
+        elem_raw = parts[0].strip()
+        elem_clean = elem_raw.replace('=', '').replace('+', '').replace('@', '').replace('*', '').replace('!', '').replace('#', '').strip()
+        
+        is_subtotal = '@' in elem_raw or '#' in elem_raw or '*' in elem_raw or '!' in elem_raw or 'Total' in elem_raw
+        row_type = 'subtotal' if is_subtotal else 'data'
+        
+        p1_tokens = parts[1].strip().split() if len(parts) > 1 else []
+        p2_tokens = parts[2].strip().split() if len(parts) > 2 else []
+        var_tokens = parts[3].strip().split() if len(parts) > 3 else []
+        
+        def pad_tokens(tokens, length=4):
+            return tokens + [""] * (length - len(tokens))
+            
+        row_vals = [elem_clean] + pad_tokens(p1_tokens, 4) + pad_tokens(p2_tokens, 4) + pad_tokens(var_tokens, 4)
+        table_rows.append((row_type, row_vals))
+        
+    ws['A4'] = "Element / Cost Category"
+    ws.merge_cells('B4:E4')
+    ws['B4'] = "Period 1 (June 2026)"
+    ws.merge_cells('F4:I4')
+    ws['F4'] = "Period 2 (July 2026)"
+    ws.merge_cells('J4:M4')
+    ws['J4'] = "Cost Variance"
+    
+    subheaders = [
+        "Line Item",
+        "V-Rate (Rs/Unit)", "Usage", "V-Cost (Rs/T)", "F-Cost (Rs/T)",
+        "V-Rate (Rs/Unit)", "Usage", "V-Cost (Rs/T)", "F-Cost (Rs/T)",
+        "V-Rate (Rs/Unit)", "Usage", "V-Cost (Rs/T)", "F-Cost (Rs/T)"
+    ]
+    for c_idx, subh in enumerate(subheaders, 1):
+        ws.cell(row=5, column=c_idx, value=subh)
+        
+    header_fill_1 = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    header_fill_2 = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+    
+    for col in range(1, 14):
+        cell4 = ws.cell(row=4, column=col)
+        cell5 = ws.cell(row=5, column=col)
+        cell4.fill = header_fill_1
+        cell4.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        cell4.alignment = Alignment(horizontal="center", vertical="center")
+        
+        cell5.fill = header_fill_2
+        cell5.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        cell5.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        
+    ws.row_dimensions[4].height = 22
+    ws.row_dimensions[5].height = 26
+    
+    current_r = 6
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    
+    cat_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    subtotal_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    summary_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    
+    for r_type, vals in table_rows:
+        for c_idx, val in enumerate(vals, 1):
+            cell = ws.cell(row=current_r, column=c_idx)
+            num_val = val
+            if val not in ["", "NaN", None]:
+                try:
+                    num_val = float(val)
+                except ValueError:
+                    num_val = val
+            cell.value = num_val
+            cell.border = thin_border
+            
+            if c_idx == 1:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+                
+            if r_type == 'category':
+                cell.fill = cat_fill
+                cell.font = Font(name="Calibri", size=9, bold=True, color="1F4E79")
+            elif r_type == 'subtotal':
+                cell.fill = subtotal_fill
+                cell.font = Font(name="Calibri", size=9, bold=True)
+            elif r_type == 'summary':
+                cell.fill = summary_fill
+                cell.font = Font(name="Calibri", size=9, bold=True, color="805300")
+            else:
+                cell.font = Font(name="Calibri", size=9)
+                
+        if r_type == 'category':
+            ws.merge_cells(start_row=current_r, start_column=1, end_row=current_r, end_column=13)
+            
+        current_r += 1
+        
+    ws.column_dimensions['A'].width = 30
+    for col_letter in ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M']:
+        ws.column_dimensions[col_letter].width = 14
+
+out_buffer = io.BytesIO()
+wb.save(out_buffer)
+out_bytes = out_buffer.getvalue()
+`;
+
+    try {
+      await pyodide.runPythonAsync(pythonScript);
+      const outBytes = pyodide.globals.get("out_bytes").toJs();
+
+      // Trigger automatic browser download
+      const blob = new Blob([outBytes], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = file.name.replace(".txt", "") + "_Variance_Report.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      statusEl.textContent = "Conversion Complete! File downloaded.";
+      statusEl.style.color = "#16a34a";
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = "Error processing file: " + err.message;
+      statusEl.style.color = "#dc2626";
+    }
+  }
+</script>
+
+</body>
+</html>

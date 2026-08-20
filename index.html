@@ -143,13 +143,53 @@ def format_cell_val(val):
             return val
     return val
 
-# Clean entire input text first
+def clean_cc_name_and_prod(cc_rest):
+    m = re.search(r'Gross\\s+Production\\s*:\\s*([\\d,.]+)?', cc_rest, re.I)
+    if m:
+        cc_name = cc_rest[:m.start()].strip()
+        gross_prod = m.group(1).strip() if m.group(1) else ""
+    else:
+        m2 = re.search(r'GROSS\\s+PRODN\\s*:\\s*([\\d,.]+)?', cc_rest, re.I)
+        if m2:
+            cc_name = cc_rest[:m2.start()].strip()
+            gross_prod = m2.group(1).strip() if m2.group(1) else ""
+        else:
+            cc_name = cc_rest.strip()
+            gross_prod = ""
+    return re.sub(r'[\\t\\r\\n]+', ' ', cc_name).strip(), gross_prod
+
+def parse_summary_by_end_position(line):
+    line_clean = line.strip()
+    if not line_clean or line_clean == 'SUMMARY':
+        return None
+        
+    row = ['SUMMARY', '-', '-', '-', '-', '-', '-', '-', '-']
+    matches = list(re.finditer(r'[\\d,.]+', line))
+    for m in matches:
+        val = m.group(0)
+        end = m.end()
+        if end <= 25:
+            row[1] = val
+        elif end <= 40:
+            row[2] = val
+        elif end <= 56:
+            row[3] = val
+        elif end <= 70:
+            row[4] = val
+        elif end <= 86:
+            row[5] = val
+        elif end <= 100:
+            row[6] = val
+        elif end <= 112:
+            row[7] = val
+        else:
+            row[8] = val
+    return row
+
 raw_clean = "".join(c for c in raw_text if ord(c) >= 32 or c in "\\n\\t\\r\\f")
 
-# Detect file format type
-is_variance = bool(re.search(r'COST VARIANCE REPORT', raw_clean, re.I))
+is_variance = bool(re.search(r'COST\\s+VARIANCE\\s+REPORT', raw_clean, re.I))
 is_consolidated = bool(re.search(r'CONSOLIDATED\\s*\\(\\s*AFTER\\s+A/C\\s+CLOSING\\)', raw_clean, re.I))
-is_element_wise = bool(re.search(r'ELEMENT-WISE\\s+COST\\s+STATEMENT', raw_clean, re.I))
 
 wb = openpyxl.Workbook()
 default_sheet = wb.active
@@ -164,8 +204,8 @@ cat_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="soli
 subtotal_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 summary_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
-def get_unique_sheet_name(cc_code, cc_name):
-    raw_sheet_title = f"{cc_code} {cc_name}"
+def create_named_sheet(wb, default_sheet, is_first, cc_code, cc_name):
+    raw_sheet_title = f"{cc_code} {cc_name}".strip()
     safe_name = re.sub(r'[\\\\/*?:\\[\\]]', '', raw_sheet_title).strip()[:30]
     base_name = safe_name
     counter = 1
@@ -173,7 +213,14 @@ def get_unique_sheet_name(cc_code, cc_name):
         safe_name = f"{base_name[:27]}_{counter}"
         counter += 1
     used_sheet_names.add(safe_name)
-    return safe_name
+    
+    if is_first:
+        ws = default_sheet
+        ws.title = safe_name
+    else:
+        ws = wb.create_sheet(title=safe_name)
+    ws.views.sheetView[0].showGridLines = True
+    return ws
 
 if is_variance:
     blocks = re.split(r'\\f|(?=SAIL/RSP\\s+COST VARIANCE REPORT)', raw_clean)
@@ -214,13 +261,7 @@ if is_variance:
         })
 
     for idx, item in enumerate(parsed_sheets):
-        safe_name = get_unique_sheet_name(item['cc_code'], item['cc_name'])
-        if idx == 0:
-            ws = default_sheet
-            ws.title = safe_name
-        else:
-            ws = wb.create_sheet(title=safe_name)
-        ws.views.sheetView[0].showGridLines = True
+        ws = create_named_sheet(wb, default_sheet, idx == 0, item['cc_code'], item['cc_name'])
         
         meta_text = (
             f"Variance Period1 : {item['period1']}    Period2 : {item['period2']}\\n"
@@ -362,45 +403,14 @@ elif is_consolidated:
     cc_order = []
 
     boundaries_15 = [
-        (0, 31),    # 1: COST ELEMENTS
-        (31, 41),   # 2: UNIT
-        (41, 54),   # 3: RATE RUPEES PER UNIT
-        (54, 69),   # 4: INPUT QUANTITY
-        (69, 83),   # 5: AMOUNT VARIABLE ('000 Rs.)
-        (83, 97),   # 6: AMOUNT FIXED ('000 Rs.)
-        (97, 112),  # 7: AMOUNT TOTAL ('000 Rs.)
-        (112, 127), # 8: AMOUNT DEPRECN. ('000 Rs.)
-        (127, 140), # 9: AMOUNT I W C ('000 Rs.)
-        (140, 151), # 10: COST/UNIT VARIABLE
-        (151, 162), # 11: COST/UNIT FIXED
-        (162, 174), # 12: COST/UNIT TOTAL
-        (174, 186), # 13: COST/UNIT DEPRECN.
-        (186, 198), # 14: COST/UNIT I W C
-        (198, 220)  # 15: USAGE * 1,000
-    ]
-
-    cost_unit_slices = [
-        (0, 10, "COST"),
-        (10, 25, "Var cost"),
-        (25, 40, "Fixed Cost"),
-        (40, 55, "CBDI Cost"),
-        (55, 68, "I W C"),
-        (68, 84, "Works Cost"),
-        (84, 96, "Deprecn."),
-        (96, 108, "I N T"),
-        (108, 130, "Total Cost")
+        (0, 31), (31, 41), (41, 54), (54, 69), (69, 83),
+        (83, 97), (97, 112), (112, 127), (127, 140), (140, 151),
+        (151, 162), (162, 174), (174, 186), (186, 198), (198, 220)
     ]
 
     dist_slices = [
-        (0, 40, "To Department"),
-        (40, 70, "Product"),
-        (70, 86, "CBDI Rate"),
-        (86, 112, "Quantity"),
-        (112, 128, "Var cost"),
-        (128, 145, "Fixed Cost"),
-        (145, 163, "Tot CBDI Cost"),
-        (163, 181, "Depreciation"),
-        (181, 205, "I W C")
+        (0, 40), (40, 70), (70, 86), (86, 112), (112, 128),
+        (128, 145), (145, 163), (163, 181), (181, 205)
     ]
 
     for page in pages:
@@ -413,18 +423,8 @@ elif is_consolidated:
             continue
             
         cc_code = sanitize(cc_match.group(1))
-        cc_rest = cc_match.group(2)
+        cc_name, gross_prod = clean_cc_name_and_prod(sanitize(cc_match.group(2)))
         
-        cc_name = ""
-        gross_prod = ""
-        if 'GROSS PRODN :' in cc_rest:
-            parts = cc_rest.split('GROSS PRODN :')
-            cc_name = sanitize(parts[0])
-            prod_val = parts[1].replace('TONNE', '').replace('X04', '').strip()
-            gross_prod = prod_val.split()[0] if prod_val else ""
-        else:
-            cc_name = sanitize(cc_rest)
-            
         period_match = re.search(r'PERIOD:\\s*([^\\n\\r\\t]+)', page)
         period = sanitize(period_match.group(1).split()[0]) if period_match else ""
         
@@ -499,24 +499,18 @@ elif is_consolidated:
                 cost_centers[cc_code]['cost_elements'].append(('subtotal' if is_subtotal else 'data', vals))
                 
             elif mode == 'cost_unit':
-                vals = [sanitize(line_str[s:e]) if len(line_str) > s else "" for s, e, _ in cost_unit_slices]
-                vals = [v if v else "-" for v in vals]
-                cost_centers[cc_code]['cost_summary'].append(vals)
+                res = parse_summary_by_end_position(line_str)
+                if res:
+                    cost_centers[cc_code]['cost_summary'].append(res)
                 
             elif mode == 'distribution':
-                vals = [sanitize(line_str[s:e]) if len(line_str) > s else "" for s, e, _ in dist_slices]
+                vals = [sanitize(line_str[s:e]) if len(line_str) > s else "" for s, e in dist_slices]
                 vals = [v if v else "-" for v in vals]
                 cost_centers[cc_code]['distribution'].append(vals)
 
     for idx, cc_code in enumerate(cc_order):
         item = cost_centers[cc_code]
-        safe_name = get_unique_sheet_name(item['cc_code'], item['cc_name'])
-        if idx == 0:
-            ws = default_sheet
-            ws.title = safe_name
-        else:
-            ws = wb.create_sheet(title=safe_name)
-        ws.views.sheetView[0].showGridLines = True
+        ws = create_named_sheet(wb, default_sheet, idx == 0, item['cc_code'], item['cc_name'])
         
         meta_text = (
             f"Period : {item['period']}    Print Date : {item['print_date']}\\n"
@@ -659,16 +653,8 @@ else:
     cc_order = []
 
     slices = [
-        (0, 45),    # Col A: Description
-        (45, 58),   # Col B: RATE
-        (58, 73),   # Col C: QUANTITY
-        (73, 93),   # Col D: VAR-COST
-        (93, 109),  # Col E: FIXED-COST
-        (109, 127), # Col F: TOTAL-COST
-        (127, 145), # Col G: VAR/UNIT
-        (145, 161), # Col H: FIXED/UNIT
-        (161, 176), # Col I: TOTAL/UNIT
-        (176, 220)  # Col J: USAGE *1000
+        (0, 45), (45, 58), (58, 73), (73, 93), (93, 109),
+        (109, 127), (127, 145), (145, 161), (161, 176), (176, 220)
     ]
 
     for page in pages:
@@ -681,17 +667,8 @@ else:
             continue
             
         cc_code = sanitize(cc_match.group(1))
-        cc_rest = cc_match.group(2)
+        cc_name, gross_prod = clean_cc_name_and_prod(sanitize(cc_match.group(2)))
         
-        cc_name = ""
-        gross_prod = ""
-        if 'Gross Production:' in cc_rest:
-            parts = cc_rest.split('Gross Production:')
-            cc_name = parts[0].strip()
-            gross_prod = parts[1].replace('Tonnes', '').replace('Page', '').strip().split()[0]
-        else:
-            cc_name = sanitize(cc_rest)
-            
         period_match = re.search(r'PERIOD\\s*:\\s*([^\\n\\r(]+)', page)
         period = sanitize(period_match.group(1).strip()) if period_match else ""
         
@@ -744,13 +721,7 @@ else:
 
     for idx, cc_code in enumerate(cc_order):
         item = cost_centers[cc_code]
-        safe_name = get_unique_sheet_name(item['cc_code'], item['cc_name'])
-        if idx == 0:
-            ws = default_sheet
-            ws.title = safe_name
-        else:
-            ws = wb.create_sheet(title=safe_name)
-        ws.views.sheetView[0].showGridLines = True
+        ws = create_named_sheet(wb, default_sheet, idx == 0, item['cc_code'], item['cc_name'])
         
         meta_text = (
             f"Period : {item['period']}    Prepared On : {item['prepared_on']}\\n"

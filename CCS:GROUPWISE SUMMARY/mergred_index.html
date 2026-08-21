@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cost Sheet & Expense Summary Excel Converter</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8fafc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: white;
+      padding: 2.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      width: 540px;
+      text-align: center;
+    }
+    h2 { margin-top: 0; color: #1e293b; }
+    p { color: #64748b; font-size: 0.95rem; line-height: 1.5; }
+    .badge {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    .type-selector {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin: 1.2rem 0;
+      text-align: left;
+    }
+    .type-selector label {
+      font-size: 0.9rem;
+      color: #334155;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .dropzone {
+      border: 2px dashed #94a3b8;
+      border-radius: 8px;
+      padding: 2.5rem 1rem;
+      margin: 1.5rem 0;
+      cursor: pointer;
+      background: #f1f5f9;
+      transition: all 0.2s;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    #status { font-size: 0.9rem; color: #2563eb; font-weight: 500; min-height: 1.5rem; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <span class="badge" id="appBadge">SAIL / RSP & Product Costing System</span>
+  <h2 id="appHeading">Report to Excel Converter</h2>
+  
+  <div class="type-selector">
+    <label>
+      <input type="radio" name="reportType" value="auto" checked /> Auto-Detect
+    </label>
+    <label>
+      <input type="radio" name="reportType" value="cost_sheet" /> Cost Sheet Summary
+    </label>
+    <label>
+      <input type="radio" name="reportType" value="groupwise" /> Groupwise Summary
+    </label>
+  </div>
+
+  <p id="appDesc">Drop your <strong>CONSOLIDATED COST SHEET</strong> or <strong>GROUPWISE SUMMARY</strong> <code>.txt</code> file to download the formatted <code>.xlsx</code> workbook.</p>
+  
+  <div class="dropzone" id="dropzone">
+    <span id="dropText">Drag & Drop .txt file here or <u>Browse</u></span>
+    <input type="file" id="fileInput" accept=".txt" style="display:none;" />
+  </div>
+
+  <div id="status">Loading Python runtime in browser...</div>
+</div>
+
+<script>
+  let pyodide = null;
+  const statusEl = document.getElementById("status");
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("fileInput");
+
+  async function initPyodide() {
+    try {
+      pyodide = await loadPyodide();
+      await pyodide.loadPackage("micropip");
+      const micropip = pyodide.pyimport("micropip");
+      await micropip.install("openpyxl");
+      statusEl.textContent = "Ready! Drop your .txt file.";
+      statusEl.style.color = "#16a34a";
+    } catch (err) {
+      statusEl.textContent = "Failed to load Python environment: " + err.message;
+      statusEl.style.color = "#dc2626";
+    }
+  }
+  initPyodide();
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  async function handleFile(file) {
+    if (!pyodide) {
+      alert("Python environment is still loading. Please wait a moment.");
+      return;
+    }
+    if (!file.name.endsWith(".txt")) {
+      alert("Please upload a valid .txt file.");
+      return;
+    }
+
+    statusEl.textContent = "Processing and generating Excel file...";
+    statusEl.style.color = "#2563eb";
+
+    const text = await file.text();
+    const selectedType = document.querySelector('input[name="reportType"]:checked').value;
+
+    let isGroupwise = false;
+    if (selectedType === "groupwise") {
+      isGroupwise = true;
+    } else if (selectedType === "cost_sheet") {
+      isGroupwise = false;
+    } else {
+      isGroupwise = text.includes("GROUPWISE") || text.includes("NEW PRODUCT COSTING") || text.includes("RUN-DATE");
+    }
+
+    pyodide.globals.set("raw_text", text);
+
+    const costSheetScript = `
+import re
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import io
+
+def sanitize(val):
+    if isinstance(val, str):
+        return "".join(c for c in val if ord(c) >= 32 or c in "\\n\\t\\r").strip()
+    return val
+
+raw_clean = "".join(c for c in raw_text if ord(c) >= 32 or c in "\\n\\t\\r\\f")
+
+period_m = re.search(r'PERIOD:\\s*([^\\s]+)', raw_clean, re.I)
+period = sanitize(period_m.group(1)) if period_m else ""
+
+date_m = re.search(r'DATE:\\s*([^\\s]+)', raw_clean, re.I)
+report_date = sanitize(date_m.group(1)) if date_m else ""
+
+lines = raw_clean.split('\\n')
+data_rows = []
+
+for line in lines:
+    line_clean = line.strip()
+    if not line_clean or line_clean.startswith('---') or line_clean.startswith('==='):
+        continue
+    if 'S A I L' in line_clean or 'COST   SHEET   SUMMARY' in line_clean:
+        continue
+    if 'Page Nos.' in line_clean or 'start  End' in line_clean or 'Production' in line_clean:
+        continue
+    if line_clean.startswith('X04') or line_clean.startswith('/*'):
+        continue
+        
+    m_start = re.match(r'^\\s*(\\d+)\\s+(\\d+)\\s+(\\w+)\\s+(.*)$', line)
+    if m_start:
+        p_start, p_end, cc_code, rest = m_start.groups()
+        
+        cc_name = rest[0:60].strip() if len(rest) > 0 else ""
+        exp_name = rest[60:81].strip() if len(rest) > 60 else ""
+        
+        remaining = rest[81:].strip() if len(rest) > 81 else ""
+        tokens = remaining.split()
+        
+        net_prod = tokens[0] if len(tokens) > 0 else "-"
+        unit = tokens[1] if len(tokens) > 1 else "-"
+        var_cost = tokens[2] if len(tokens) > 2 else "-"
+        fixed_cost = tokens[3] if len(tokens) > 3 else "-"
+        depn = tokens[4] if len(tokens) > 4 else "-"
+        iwc = tokens[5] if len(tokens) > 5 else "-"
+        inte = tokens[6] if len(tokens) > 6 else "-"
+        total = tokens[7] if len(tokens) > 7 else "-"
+        
+        row_vals = [p_start, p_end, cc_code, cc_name, exp_name, net_prod, unit, var_cost, fixed_cost, depn, iwc, inte, total]
+        data_rows.append([sanitize(v) for v in row_vals])
+
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "COST SHEET SUMMARY"
+ws.views.sheetView[0].showGridLines = True
+
+thin_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'),
+                     top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9'))
+header_fill_1 = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+header_fill_2 = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+
+meta_text = (
+    f"SAIL / RSP                  CONSOLIDATED ( AFTER A/C CLOSING)   COST   SHEET   SUMMARY\\n"
+    f"PERIOD : {period}              DATE : {report_date}              C & IT / F & A"
+)
+
+ws['A1'] = "CONSOLIDATED COST SHEET SUMMARY"
+ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
+ws['A2'] = meta_text
+ws['A2'].font = Font(name="Calibri", size=10)
+ws['A2'].alignment = Alignment(wrap_text=True, vertical="top")
+ws.row_dimensions[2].height = 35
+ws.merge_cells('A2:M2')
+
+fill_meta = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
+for r in range(1, 3):
+    for c in range(1, 14):
+        ws.cell(row=r, column=c).fill = fill_meta
+
+ws.merge_cells('A4:B4')
+ws['A4'] = "Page Nos."
+ws['C4'] = "CC"
+ws['D4'] = "Cost Center Name"
+ws['E4'] = "Expense Name"
+ws['F4'] = "Net Production"
+ws['G4'] = "Unit"
+ws['H4'] = "Variable"
+ws['I4'] = "Fixed"
+ws['J4'] = "Depn."
+ws['K4'] = "I W C"
+ws['L4'] = "I N T"
+ws['M4'] = "TOTAL"
+
+subheaders = [
+    "Start", "End", "Code", "Description", "Expense Item",
+    "Quantity", "Unit", "Rs / Unit", "Rs / Unit", "Rs / Unit",
+    "Rs / Unit", "Rs / Unit", "Rs / Unit"
+]
+
+for col in range(1, 14):
+    cell4 = ws.cell(row=4, column=col)
+    cell5 = ws.cell(row=5, column=col, value=subheaders[col-1])
+    cell4.fill = header_fill_1
+    cell4.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    cell4.alignment = Alignment(horizontal="center", vertical="center")
+    cell5.fill = header_fill_2
+    cell5.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+    cell5.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+ws.row_dimensions[4].height = 22
+ws.row_dimensions[5].height = 24
+
+def format_num(val):
+    if val in ["-", "", "NaN", "Inf", None]:
+        return val
+    clean_num = str(val).replace(',', '')
+    try:
+        return float(clean_num)
+    except ValueError:
+        return val
+
+current_r = 6
+for row_data in data_rows:
+    for c_idx, val in enumerate(row_data, 1):
+        cell = ws.cell(row=current_r, column=c_idx)
+        if c_idx in [1, 2]:
+            try:
+                cell.value = int(val)
+            except ValueError:
+                cell.value = val
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        elif c_idx in [3, 7]:
+            cell.value = str(val)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        elif c_idx in [4, 5]:
+            cell.value = str(val)
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+        else:
+            cell.value = format_num(val)
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+            
+        cell.border = thin_border
+        cell.font = Font(name="Calibri", size=9)
+        
+    current_r += 1
+
+ws.column_dimensions['A'].width = 8
+ws.column_dimensions['B'].width = 8
+ws.column_dimensions['C'].width = 10
+ws.column_dimensions['D'].width = 44
+ws.column_dimensions['E'].width = 24
+ws.column_dimensions['F'].width = 16
+ws.column_dimensions['G'].width = 10
+for col_letter in ['H', 'I', 'J', 'K', 'L', 'M']:
+    ws.column_dimensions[col_letter].width = 14
+
+out_buffer = io.BytesIO()
+wb.save(out_buffer)
+out_bytes = out_buffer.getvalue()
+`;
+
+    const groupwiseScript = `
+import re
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import io
+
+def sanitize(val):
+    if isinstance(val, str):
+        return "".join(c for c in val if ord(c) >= 32 or c in "\\n\\t\\r").strip()
+    return val
+
+def format_cell_val(val):
+    if val in ["-", "", "NaN", "Inf", None]:
+        return val
+    clean_num = str(val).replace(',', '').replace('-', '')
+    if clean_num.replace('.', '', 1).isdigit():
+        try:
+            if str(val).strip().endswith('-'):
+                return -float(str(val).replace(',', '')[:-1])
+            else:
+                return float(str(val).replace(',', ''))
+        except ValueError:
+            return val
+    return val
+
+raw_clean = "".join(c for c in raw_text if ord(c) >= 32 or c in "\\n\\t\\r\\f")
+
+run_date_m = re.search(r'RUN-DATE\\s*:\\s*([^\\t\\n\\r]+)', raw_clean, re.I)
+run_date = sanitize(run_date_m.group(1)) if run_date_m else ""
+
+cs_type_m = re.search(r'CS\\s+TYPE\\s*:\\s*([^\\t\\n\\r]+?)(?=\\s*PERIOD|\\s*$)', raw_clean, re.I)
+cs_type = sanitize(cs_type_m.group(1)) if cs_type_m else ""
+
+period_m = re.search(r'PERIOD\\s*([^\\t\\n\\r]+?)(?=\\s*Page|\\s*$)', raw_clean, re.I)
+period = sanitize(period_m.group(1)) if period_m else ""
+
+lines = raw_clean.split('\\n')
+table_rows = []
+
+i = 0
+while i < len(lines):
+    line = lines[i]
+    line_clean = line.strip()
+    
+    if not line_clean or line_clean.startswith('--------------------') or '/* C & I T' in line_clean:
+        i += 1
+        continue
+    if 'N E W    P R O D U C T' in line_clean or 'GROUPWISE  SUMMARY' in line_clean or 'RUN-DATE' in line_clean or 'Page No' in line_clean:
+        i += 1
+        continue
+    if 'EXP   EXPENSE  DESCRIPTION' in line_clean or 'CODE' in line_clean or 'NAME' in line_clean:
+        i += 1
+        continue
+        
+    next_line = lines[i+1].strip() if i + 1 < len(lines) else ""
+    
+    if '####' in next_line:
+        table_rows.append(('group_cat', sanitize(line_clean)))
+        i += 2
+        continue
+    elif '****' in next_line:
+        table_rows.append(('subgroup_cat', sanitize(line_clean)))
+        i += 2
+        continue
+    elif '####' in line_clean or '****' in line_clean:
+        i += 1
+        continue
+        
+    l_exp = line.expandtabs(8)
+    
+    if 'Total for the Sub Group' in line:
+        vals = ['-', 'Total for the Sub Group', '-', '-',
+                l_exp[72:86].strip(), l_exp[86:103].strip(), l_exp[103:118].strip(), l_exp[118:140].strip()]
+        table_rows.append(('subgroup_total', [sanitize(v) if v else '-' for v in vals]))
+        i += 1
+        continue
+        
+    if 'Total for the Group' in line:
+        vals = ['-', 'Total for the Group', '-', '-',
+                l_exp[72:86].strip(), l_exp[86:103].strip(), l_exp[103:118].strip(), l_exp[118:140].strip()]
+        table_rows.append(('group_total', [sanitize(v) if v else '-' for v in vals]))
+        i += 1
+        continue
+        
+    if 'Grand Total for All Groups' in line:
+        vals = ['-', 'Grand Total for All Groups', '-', '-',
+                l_exp[72:86].strip(), l_exp[86:103].strip(), l_exp[103:118].strip(), l_exp[118:140].strip()]
+        table_rows.append(('grand_total', [sanitize(v) if v else '-' for v in vals]))
+        i += 1
+        continue
+        
+    if re.match(r'^\\s*\\d+\\s+', line):
+        vals = [
+            l_exp[0:6].strip(),
+            l_exp[6:46].strip(),
+            l_exp[46:62].strip(),
+            l_exp[62:72].strip(),
+            l_exp[72:86].strip(),
+            l_exp[86:103].strip(),
+            l_exp[103:118].strip(),
+            l_exp[118:140].strip()
+        ]
+        table_rows.append(('data', [sanitize(v) if v else '-' for v in vals]))
+        i += 1
+        continue
+        
+    i += 1
+
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "GROUPWISE SUMMARY"
+ws.views.sheetView[0].showGridLines = True
+
+thin_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'),
+                     top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9'))
+header_fill_2 = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+cat_group_fill = PatternFill(start_color="B4C6E7", end_color="B4C6E7", fill_type="solid")
+cat_subgroup_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+subtotal_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+grand_total_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+meta_text = (
+    f"SYSTEM : NEW PRODUCT COSTING SYSTEM    C&IT/F&A\\n"
+    f"RUN-DATE : {run_date}    CS TYPE : {cs_type}    PERIOD : {period}"
+)
+
+ws['A1'] = "GROUPWISE SUMMARY OF EXPENSES BOOKED DIRECTLY"
+ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
+ws['A2'] = meta_text
+ws['A2'].font = Font(name="Calibri", size=10)
+ws['A2'].alignment = Alignment(wrap_text=True, vertical="top")
+ws.row_dimensions[2].height = 40
+ws.merge_cells('A2:H2')
+
+fill_meta = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
+for r in range(1, 3):
+    for c in range(1, 9):
+        ws.cell(row=r, column=c).fill = fill_meta
+
+headers_gw = [
+    "EXP CODE", "EXPENSE DESCRIPTION", "UNIT NAME", "RATE", "QUANTITY",
+    "VARIABLE COST", "FIXED COST", "TOTAL COST"
+]
+
+for c_idx, head in enumerate(headers_gw, 1):
+    cell = ws.cell(row=4, column=c_idx, value=head)
+    cell.fill = header_fill_2
+    cell.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+ws.row_dimensions[4].height = 25
+
+current_r = 5
+for r_type, r_data in table_rows:
+    if r_type == 'group_cat':
+        cell = ws.cell(row=current_r, column=1, value=r_data)
+        cell.fill = cat_group_fill
+        cell.font = Font(name="Calibri", size=10, bold=True, color="002060")
+        cell.border = thin_border
+        ws.merge_cells(start_row=current_r, start_column=1, end_row=current_r, end_column=8)
+        current_r += 1
+        continue
+    elif r_type == 'subgroup_cat':
+        cell = ws.cell(row=current_r, column=1, value=r_data)
+        cell.fill = cat_subgroup_fill
+        cell.font = Font(name="Calibri", size=9, bold=True, color="1F4E79")
+        cell.border = thin_border
+        ws.merge_cells(start_row=current_r, start_column=1, end_row=current_r, end_column=8)
+        current_r += 1
+        continue
+        
+    for c_idx, val in enumerate(r_data, 1):
+        cell = ws.cell(row=current_r, column=c_idx)
+        cell.value = format_cell_val(val) if c_idx > 3 else val
+        cell.border = thin_border
+        
+        if c_idx in [1, 3]:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        elif c_idx == 2:
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+        else:
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+            
+        if r_type == 'subgroup_total':
+            cell.fill = subtotal_fill
+            cell.font = Font(name="Calibri", size=9, bold=True)
+        elif r_type == 'group_total':
+            cell.fill = subtotal_fill
+            cell.font = Font(name="Calibri", size=9, bold=True, color="1F4E79")
+        elif r_type == 'grand_total':
+            cell.fill = grand_total_fill
+            cell.font = Font(name="Calibri", size=10, bold=True, color="805300")
+        else:
+            cell.font = Font(name="Calibri", size=9)
+            
+    current_r += 1
+
+ws.column_dimensions['A'].width = 12
+ws.column_dimensions['B'].width = 38
+ws.column_dimensions['C'].width = 14
+for col_letter in ['D', 'E', 'F', 'G', 'H']:
+    ws.column_dimensions[col_letter].width = 18
+
+out_buffer = io.BytesIO()
+wb.save(out_buffer)
+out_bytes = out_buffer.getvalue()
+`;
+
+    try {
+      const activeScript = isGroupwise ? groupwiseScript : costSheetScript;
+      await pyodide.runPythonAsync(activeScript);
+      const outBytes = pyodide.globals.get("out_bytes").toJs();
+
+      const blob = new Blob([outBytes], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const suffix = isGroupwise ? "_Groupwise_Summary.xlsx" : "_Cost_Sheet_Summary.xlsx";
+      a.href = downloadUrl;
+      a.download = file.name.replace(".txt", "") + suffix;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      statusEl.textContent = `Conversion Complete (${isGroupwise ? 'Groupwise' : 'Cost Sheet'})! File downloaded.`;
+      statusEl.style.color = "#16a34a";
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = "Error processing file: " + err.message;
+      statusEl.style.color = "#dc2626";
+    }
+  }
+</script>
+
+</body>
+</html>

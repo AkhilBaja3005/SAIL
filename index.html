@@ -35,11 +35,36 @@
       font-weight: 600;
       margin-bottom: 1rem;
     }
+    .select-wrapper {
+      margin: 1.25rem 0 0.5rem 0;
+      text-align: left;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 0.4rem;
+    }
+    select {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background-color: #fff;
+      font-size: 0.9rem;
+      color: #1e293b;
+      outline: none;
+    }
+    select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
     .dropzone {
       border: 2px dashed #94a3b8;
       border-radius: 8px;
-      padding: 2.5rem 1rem;
-      margin: 1.5rem 0;
+      padding: 2rem 1rem;
+      margin: 1.25rem 0;
       cursor: pointer;
       background: #f1f5f9;
       transition: all 0.2s;
@@ -56,8 +81,18 @@
 <div class="card">
   <span class="badge">Universal Converter</span>
   <h2>Cost Report Converter</h2>
-  <p>Drop any of your SAIL/RSP <code>.txt</code> reports to automatically generate and download the formatted multi-sheet <code>.xlsx</code> workbook.</p>
+  <p>Select report type and drop your <code>.txt</code> report to generate the formatted Excel workbook.</p>
   
+  <div class="select-wrapper">
+    <label for="reportType">Select Report Type:</label>
+    <select id="reportType">
+      <option value="auto">Auto-Detect</option>
+      <option value="cost_sheet">Cost Sheet / Monthly Cost Statement (15 Columns)</option>
+      <option value="variance">Cost Variance Report</option>
+      <option value="element_wise">Element-Wise Cost Statement (10 Columns)</option>
+    </select>
+  </div>
+
   <div class="dropzone" id="dropzone">
     <span id="dropText">Drag & Drop .txt file here or <u>Browse</u></span>
     <input type="file" id="fileInput" accept=".txt" style="display:none;" />
@@ -71,6 +106,7 @@
   const statusEl = document.getElementById("status");
   const dropzone = document.getElementById("dropzone");
   const fileInput = document.getElementById("fileInput");
+  const reportTypeSelect = document.getElementById("reportType");
 
   async function initPyodide() {
     try {
@@ -78,7 +114,7 @@
       await pyodide.loadPackage("micropip");
       const micropip = pyodide.pyimport("micropip");
       await micropip.install("openpyxl");
-      statusEl.textContent = "Ready! Drop your .txt file.";
+      statusEl.textContent = "Ready! Select type and drop your .txt file.";
       statusEl.style.color = "#16a34a";
     } catch (err) {
       statusEl.textContent = "Failed to load Python environment: " + err.message;
@@ -117,6 +153,7 @@
 
     const text = await file.text();
     pyodide.globals.set("raw_text", text);
+    pyodide.globals.set("selected_mode", reportTypeSelect.value);
 
     const pythonScript = `
 import re
@@ -188,8 +225,19 @@ def parse_summary_by_end_position(line):
 
 raw_clean = "".join(c for c in raw_text if ord(c) >= 32 or c in "\\n\\t\\r\\f")
 
-is_variance = bool(re.search(r'COST\\s+VARIANCE\\s+REPORT', raw_clean, re.I))
-is_consolidated = bool(re.search(r'CONSOLIDATED\\s*\\(\\s*AFTER\\s+A/C\\s+CLOSING\\)', raw_clean, re.I))
+if selected_mode == "variance":
+    is_variance, is_consolidated = True, False
+elif selected_mode == "cost_sheet":
+    is_variance, is_consolidated = False, True
+elif selected_mode == "element_wise":
+    is_variance, is_consolidated = False, False
+else:
+    is_variance = bool(re.search(r"COST\\s+VARIANCE\\s+REPORT", raw_clean, re.I))
+    is_consolidated = bool(
+        re.search(r"CONSOLIDATED\\s*\\(\\s*AFTER\\s+A/C\\s+CLOSING\\)", raw_clean, re.I) or
+        re.search(r"MONTHLY\\s+COST\\s+STATEMENT", raw_clean, re.I) or
+        re.search(r"C\\s*O\\s*S\\s*T\\s+E\\s*L\\s*E\\s*M\\s*E\\s*N\\s*T\\s*S", raw_clean, re.I)
+    )
 
 wb = openpyxl.Workbook()
 default_sheet = wb.active
@@ -398,7 +446,7 @@ elif is_consolidated:
             return True
         return False
 
-    pages = re.split(r'\\f|(?=X00\\s+SAIL/RSP\\s+CONSOLIDATED)', raw_clean)
+    pages = re.split(r'\\f|(?=X00\\s+SAIL/RSP\\s+CONSOLIDATED)|(?=@?\\s*SAIL\\s*/?\\s*RSP\\s+MONTHLY\\s+COST\\s+STATEMENT)', raw_clean)
     cost_centers = {}
     cc_order = []
 
@@ -415,7 +463,7 @@ elif is_consolidated:
 
     for page in pages:
         page = page.strip()
-        if not page or 'CONSOLIDATED' not in page:
+        if not page or ('CONSOLIDATED' not in page and 'MONTHLY COST STATEMENT' not in page):
             continue
             
         cc_match = re.search(r'CC CODE\\s*:\\s*(\\w+)\\s+([^\\n\\r]+)', page)
@@ -451,9 +499,9 @@ elif is_consolidated:
             if not line_clean:
                 continue
                 
-            if 'SAIL/RSP' in line_clean or 'CONSOLIDATED' in line_clean or 'PRINT DATE:' in line_clean:
+            if 'SAIL/RSP' in line_clean or 'CONSOLIDATED' in line_clean or 'PRINT DATE:' in line_clean or 'MONTHLY COST STATEMENT' in line_clean:
                 continue
-            if 'CC CODE:' in line_clean or 'GROSS PRODN :' in line_clean or 'Page-' in line_clean or 'X04' in line_clean:
+            if 'CC CODE:' in line_clean or 'CC CODE :' in line_clean or 'GROSS PRODN :' in line_clean or 'Page-' in line_clean or 'Page :' in line_clean or 'X04' in line_clean or 'X00' in line_clean:
                 continue
             if is_numbered_header_row(line_clean):
                 continue
@@ -518,7 +566,7 @@ elif is_consolidated:
             f"Gross Production : {item['gross_prod']} TONNE"
         )
         
-        ws['A1'] = "CONSOLIDATED (AFTER A/C CLOSING)"
+        ws['A1'] = "COST STATEMENT (15-COLUMN)"
         ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
         ws['A2'] = meta_text
         ws['A2'].font = Font(name="Calibri", size=10)
@@ -729,7 +777,7 @@ else:
             f"Gross Production : {item['gross_prod']} Tonnes"
         )
         
-        ws['A1'] = "ELEMENT-WISE COST STATEMENT"
+        ws['A1'] = "ELEMENT-WISE COST STATEMENT (10-COLUMN)"
         ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
         ws['A2'] = meta_text
         ws['A2'].font = Font(name="Calibri", size=10)

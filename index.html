@@ -3,868 +3,1473 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SAIL/RSP Cost Statement & Variance Excel Converter</title>
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+  <title>SAIL / RSP Cost Sheet TXT to XLSX Converter</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (xlsx.full.min.js) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f8fafc;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-    }
-    .card {
-      background: white;
-      padding: 2.5rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-      width: 540px;
-      text-align: center;
-    }
-    h2 { margin-top: 0; color: #1e293b; }
-    p { color: #64748b; font-size: 0.95rem; line-height: 1.5; }
-    .badge {
-      display: inline-block;
-      background: #e0f2fe;
-      color: #0369a1;
-      padding: 0.25rem 0.6rem;
-      border-radius: 9999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-    }
-    .select-wrapper {
-      margin: 1.25rem 0 0.5rem 0;
-      text-align: left;
-    }
-    label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #475569;
-      margin-bottom: 0.4rem;
-    }
-    select {
-      width: 100%;
-      padding: 0.6rem 0.8rem;
-      border-radius: 6px;
-      border: 1px solid #cbd5e1;
-      background-color: #fff;
-      font-size: 0.9rem;
-      color: #1e293b;
-      outline: none;
-    }
-    select:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
-    }
-    .dropzone {
-      border: 2px dashed #94a3b8;
-      border-radius: 8px;
-      padding: 2rem 1rem;
-      margin: 1.25rem 0;
-      cursor: pointer;
-      background: #f1f5f9;
-      transition: all 0.2s;
-    }
-    .dropzone:hover, .dropzone.dragover {
-      border-color: #2563eb;
-      background: #eff6ff;
-    }
-    #status { font-size: 0.9rem; color: #2563eb; font-weight: 500; min-height: 1.5rem; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    pre, code, .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
   </style>
 </head>
-<body>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-slate-950">
 
-<div class="card">
-  <span class="badge">Universal Converter</span>
-  <h2>Cost Report Converter</h2>
-  <p>Select report type and drop your <code>.txt</code> report to generate the formatted Excel workbook.</p>
-  
-  <div class="select-wrapper">
-    <label for="reportType">Select Report Type:</label>
-    <select id="reportType">
-      <option value="auto">Auto-Detect</option>
-      <option value="cost_sheet">Cost Sheet / Monthly Cost Statement (15 Columns)</option>
-      <option value="variance">Cost Variance Report</option>
-      <option value="element_wise">Element-Wise Cost Statement (10 Columns)</option>
-    </select>
-  </div>
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3.5">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-400/30">
+          <i class="ph ph-file-xls text-2xl text-slate-950 font-bold"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+              SAIL / RSP Cost Sheet Converter
+            </h1>
+            <span class="text-[10px] font-semibold uppercase bg-emerald-950 text-emerald-300 border border-emerald-800/80 px-2 py-0.5 rounded-full">
+              Pixel-Perfect Fixed-Width Engine
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Accurate Character-Aligned Extraction for Consolidated, Monthly, Element-wise, Groupwise &amp; Variances</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-2 text-xs text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>100% Client-Side Instant Conversion</span>
+        </div>
+      </div>
+    </div>
+  </header>
 
-  <div class="dropzone" id="dropzone">
-    <span id="dropText">Drag & Drop .txt file here or <u>Browse</u></span>
-    <input type="file" id="fileInput" accept=".txt" style="display:none;" />
-  </div>
-
-  <div id="status">Loading Python runtime in browser...</div>
-</div>
-
-<script>
-  let pyodide = null;
-  const statusEl = document.getElementById("status");
-  const dropzone = document.getElementById("dropzone");
-  const fileInput = document.getElementById("fileInput");
-  const reportTypeSelect = document.getElementById("reportType");
-
-  async function initPyodide() {
-    try {
-      pyodide = await loadPyodide();
-      await pyodide.loadPackage("micropip");
-      const micropip = pyodide.pyimport("micropip");
-      await micropip.install("openpyxl");
-      statusEl.textContent = "Ready! Select type and drop your .txt file.";
-      statusEl.style.color = "#16a34a";
-    } catch (err) {
-      statusEl.textContent = "Failed to load Python environment: " + err.message;
-      statusEl.style.color = "#dc2626";
-    }
-  }
-  initPyodide();
-
-  dropzone.addEventListener("click", () => fileInput.click());
-  dropzone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropzone.classList.add("dragover");
-  });
-  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-  dropzone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropzone.classList.remove("dragover");
-    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-  });
-  fileInput.addEventListener("change", (e) => {
-    if (e.target.files.length) handleFile(e.target.files[0]);
-  });
-
-  async function handleFile(file) {
-    if (!pyodide) {
-      alert("Python environment is still loading. Please wait a moment.");
-      return;
-    }
-    if (!file.name.endsWith(".txt")) {
-      alert("Please upload a valid .txt file.");
-      return;
-    }
-
-    statusEl.textContent = "Processing and creating multi-sheet Excel file...";
-    statusEl.style.color = "#2563eb";
-
-    const text = await file.text();
-    pyodide.globals.set("raw_text", text);
-    pyodide.globals.set("selected_mode", reportTypeSelect.value);
-
-    const pythonScript = `
-import re
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-import io
-
-def sanitize(val):
-    if isinstance(val, str):
-        return "".join(c for c in val if ord(c) >= 32 or c in "\\n\\t\\r").strip()
-    return val
-
-def format_cell_val(val):
-    if val in ["-", "", "NaN", "Inf", None]:
-        return val
-    clean_num = str(val).replace(',', '').replace('-', '')
-    if clean_num.replace('.', '', 1).isdigit():
-        try:
-            if str(val).strip().endswith('-'):
-                return -float(str(val).replace(',', '')[:-1])
-            else:
-                return float(str(val).replace(',', ''))
-        except ValueError:
-            return val
-    return val
-
-def clean_cc_name_and_prod(cc_rest):
-    m = re.search(r'Gross\\s+Production\\s*:\\s*([\\d,.]+)?', cc_rest, re.I)
-    if m:
-        cc_name = cc_rest[:m.start()].strip()
-        gross_prod = m.group(1).strip() if m.group(1) else ""
-    else:
-        m2 = re.search(r'GROSS\\s+PRODN\\s*:\\s*([\\d,.]+)?', cc_rest, re.I)
-        if m2:
-            cc_name = cc_rest[:m2.start()].strip()
-            gross_prod = m2.group(1).strip() if m2.group(1) else ""
-        else:
-            cc_name = cc_rest.strip()
-            gross_prod = ""
-    return re.sub(r'[\\t\\r\\n]+', ' ', cc_name).strip(), gross_prod
-
-def parse_summary_by_end_position(line):
-    line_clean = line.strip()
-    if not line_clean or line_clean == 'SUMMARY':
-        return None
-        
-    row = ['SUMMARY', '-', '-', '-', '-', '-', '-', '-', '-']
-    matches = list(re.finditer(r'[\\d,.]+', line))
-    for m in matches:
-        val = m.group(0)
-        end = m.end()
-        if end <= 25:
-            row[1] = val
-        elif end <= 40:
-            row[2] = val
-        elif end <= 56:
-            row[3] = val
-        elif end <= 70:
-            row[4] = val
-        elif end <= 86:
-            row[5] = val
-        elif end <= 100:
-            row[6] = val
-        elif end <= 112:
-            row[7] = val
-        else:
-            row[8] = val
-    return row
-
-raw_clean = "".join(c for c in raw_text if ord(c) >= 32 or c in "\\n\\t\\r\\f")
-
-if selected_mode == "variance":
-    is_variance, is_consolidated = True, False
-elif selected_mode == "cost_sheet":
-    is_variance, is_consolidated = False, True
-elif selected_mode == "element_wise":
-    is_variance, is_consolidated = False, False
-else:
-    is_variance = bool(re.search(r"COST\\s+VARIANCE\\s+REPORT", raw_clean, re.I))
-    is_consolidated = bool(
-        re.search(r"CONSOLIDATED\\s*\\(\\s*AFTER\\s+A/C\\s+CLOSING\\)", raw_clean, re.I) or
-        re.search(r"MONTHLY\\s+COST\\s+STATEMENT", raw_clean, re.I) or
-        re.search(r"C\\s*O\\s*S\\s*T\\s+E\\s*L\\s*E\\s*M\\s*E\\s*N\\s*T\\s*S", raw_clean, re.I)
-    )
-
-wb = openpyxl.Workbook()
-default_sheet = wb.active
-used_sheet_names = set()
-
-thin_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'),
-                     top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9'))
-header_fill_1 = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-header_fill_2 = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
-header_fill_3 = PatternFill(start_color="335A80", end_color="335A80", fill_type="solid")
-cat_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-subtotal_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-summary_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-
-def create_named_sheet(wb, default_sheet, is_first, cc_code, cc_name):
-    raw_sheet_title = f"{cc_code} {cc_name}".strip()
-    safe_name = re.sub(r'[\\\\/*?:\\[\\]]', '', raw_sheet_title).strip()[:30]
-    base_name = safe_name
-    counter = 1
-    while safe_name in used_sheet_names:
-        safe_name = f"{base_name[:27]}_{counter}"
-        counter += 1
-    used_sheet_names.add(safe_name)
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex flex-col gap-6 w-full">
     
-    if is_first:
-        ws = default_sheet
-        ws.title = safe_name
-    else:
-        ws = wb.create_sheet(title=safe_name)
-    ws.views.sheetView[0].showGridLines = True
-    return ws
+    <!-- Top Control Bar -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Type Selector Card -->
+      <div class="lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl ring-1 ring-white/5">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <i class="ph ph-sliders"></i> Step 1: Select Report Format
+            </span>
+            <span id="detectedBadge" class="text-xs bg-emerald-950 text-emerald-300 border border-emerald-800/60 px-2 py-0.5 rounded-md hidden">
+              Auto-detected
+            </span>
+          </div>
 
-if is_variance:
-    blocks = re.split(r'\\f|(?=SAIL/RSP\\s+COST VARIANCE REPORT)', raw_clean)
-    parsed_sheets = []
+          <label class="block text-sm font-medium text-slate-200 mb-2">Cost Report Type</label>
+          <div class="relative">
+            <select id="reportTypeSelect" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm cursor-pointer shadow-inner">
+              <option value="auto">✨ Auto-Detect from File Content (Recommended)</option>
+              <option value="cs_rep_cons">1. Consolidated Cost Statement (cs_rep_display ... cons final.txt)</option>
+              <option value="cs_rep_monthly">2. Monthly Cost Statement (cs_rep_display ... monthly.txt)</option>
+              <option value="ele_display">3. Element-wise Cost Statement (ele_display_*.txt)</option>
+              <option value="grp_summ">4. Groupwise Summary of Expenses (grp_summ_*.txt)</option>
+              <option value="cum_cs">5. Cumulative Cost Sheet (cum_cs_display_*.txt)</option>
+              <option value="new_var">6. Cost Variance Report (new_var_display_*.txt)</option>
+              <option value="generic">7. Smart Auto-Delimited Tabular (Generic / Fallback)</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+              <i class="ph ph-caret-down text-base"></i>
+            </div>
+          </div>
 
-    for block in blocks:
-        block = block.strip()
-        if not block or 'COST VARIANCE REPORT' not in block:
-            continue
-        
-        cc_match = re.search(r'CC CODE\\s*:\\s*(\\w+)\\s+CC NAME\\s*:\\s*([^\\n\\r]+)', block)
-        if not cc_match:
-            continue
-        
-        cc_code = sanitize(cc_match.group(1))
-        cc_name = sanitize(cc_match.group(2))
-        
-        period_match = re.search(r'Variance Period1\\s*:\\s*([^\\n\\r]+?)\\s+Period2\\s*:\\s*([^\\n\\r]+)', block)
-        period1 = sanitize(period_match.group(1)) if period_match else ""
-        period2 = sanitize(period_match.group(2)) if period_match else ""
-        
-        prep_match = re.search(r'PREPARED ON\\s+([^\\n\\r]+)', block)
-        prepared_on = sanitize(prep_match.group(1)) if prep_match else ""
-        
-        prod_match = re.search(r'PRODUCTION\\s+1st Periiod\\s*:\\s*([^\\n\\r]+?)\\s+2nd Period\\s*:\\s*([^\\n\\r]+)', block)
-        prod_p1 = sanitize(prod_match.group(1)) if prod_match else ""
-        prod_p2 = sanitize(prod_match.group(2)) if prod_match else ""
-        
-        parsed_sheets.append({
-            'cc_code': cc_code,
-            'cc_name': cc_name,
-            'period1': period1,
-            'period2': period2,
-            'prepared_on': prepared_on,
-            'prod_p1': prod_p1,
-            'prod_p2': prod_p2,
-            'raw_block': block
-        })
+          <!-- Description Box -->
+          <div id="typeDescription" class="mt-4 p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p class="font-medium text-slate-200 flex items-center gap-1.5">
+              <i class="ph ph-info text-emerald-400 text-sm"></i> Auto Detection Enabled
+            </p>
+            <p id="typeDescriptionText">
+              Uses fixed character-slice boundaries (not whitespace splits) matching the exact mainframe/RSP terminal print layout.
+            </p>
+          </div>
+        </div>
 
-    for idx, item in enumerate(parsed_sheets):
-        ws = create_named_sheet(wb, default_sheet, idx == 0, item['cc_code'], item['cc_name'])
-        
-        meta_text = (
-            f"Variance Period1 : {item['period1']}    Period2 : {item['period2']}\\n"
-            f"CC CODE : {item['cc_code']}    CC NAME : {item['cc_name']}\\n"
-            f"PREPARED ON {item['prepared_on']}\\n"
-            f"PRODUCTION 1st Period : {item['prod_p1']}    2nd Period : {item['prod_p2']}"
-        )
-        
-        ws['A1'] = "COST VARIANCE REPORT"
-        ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
-        ws['A2'] = meta_text
-        ws['A2'].font = Font(name="Calibri", size=10)
-        ws['A2'].alignment = Alignment(wrap_text=True, vertical="top")
-        ws.row_dimensions[2].height = 65
-        ws.merge_cells('A2:M2')
-        
-        fill_meta = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
-        for r in range(1, 3):
-            for c in range(1, 14):
-                ws.cell(row=r, column=c).fill = fill_meta
-                
-        lines = item['raw_block'].split('\\n')
-        table_rows = []
-        start_table = False
-        
-        for line in lines:
-            line_clean = line.strip()
-            if "Element" in line_clean and "V-Rate" in line_clean:
-                start_table = True
-                continue
-            if not start_table or not line_clean or line_clean.startswith('---'):
-                continue
-                
-            if line_clean.startswith('CUM.') or line_clean.startswith('STOCK') or line_clean.startswith('TOTAL COST'):
-                parts = re.split(r'\\s{2,}|\\t+', line_clean)
-                label = parts[0]
-                nums = re.findall(r'-?\\d+\\.?\\d*|NaN', line_clean[len(label):])
-                row = [label, "", "", nums[0] if len(nums)>0 else "", nums[1] if len(nums)>1 else "",
-                       "", "", nums[2] if len(nums)>2 else "", nums[3] if len(nums)>3 else "",
-                       "", "", nums[4] if len(nums)>4 else "", nums[5] if len(nums)>5 else ""]
-                table_rows.append(('summary', row))
-                continue
-                
-            if "||" not in line:
-                cat_name = line_clean.replace("##", "").replace("!!", "").strip()
-                if cat_name:
-                    table_rows.append(('category', [cat_name] + [""] * 12))
-                continue
-                
-            parts = line.split('||')
-            elem_raw = parts[0].strip()
-            elem_clean = elem_raw.replace('=', '').replace('+', '').replace('@', '').replace('*', '').replace('!', '').replace('#', '').strip()
-            
-            is_subtotal = '@' in elem_raw or '#' in elem_raw or '*' in elem_raw or '!' in elem_raw or 'Total' in elem_raw
-            row_type = 'subtotal' if is_subtotal else 'data'
-            
-            p1_tokens = parts[1].strip().split() if len(parts) > 1 else []
-            p2_tokens = parts[2].strip().split() if len(parts) > 2 else []
-            var_tokens = parts[3].strip().split() if len(parts) > 3 else []
-            
-            def pad_tokens(tokens, length=4):
-                return tokens + [""] * (length - len(tokens))
-                
-            row_vals = [elem_clean] + pad_tokens(p1_tokens, 4) + pad_tokens(p2_tokens, 4) + pad_tokens(var_tokens, 4)
-            table_rows.append((row_type, row_vals))
-            
-        ws['A4'] = "Element / Cost Category"
-        ws.merge_cells('B4:E4')
-        ws['B4'] = "Period 1"
-        ws.merge_cells('F4:I4')
-        ws['F4'] = "Period 2"
-        ws.merge_cells('J4:M4')
-        ws['J4'] = "Cost Variance"
-        
-        subheaders = [
-            "Line Item",
-            "V-Rate (Rs/Unit)", "Usage", "V-Cost (Rs/T)", "F-Cost (Rs/T)",
-            "V-Rate (Rs/Unit)", "Usage", "V-Cost (Rs/T)", "F-Cost (Rs/T)",
-            "V-Rate (Rs/Unit)", "Usage", "V-Cost (Rs/T)", "F-Cost (Rs/T)"
-        ]
-        for c_idx, subh in enumerate(subheaders, 1):
-            cell4 = ws.cell(row=4, column=c_idx)
-            cell5 = ws.cell(row=5, column=c_idx, value=subh)
-            cell4.fill = header_fill_1
-            cell4.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-            cell4.alignment = Alignment(horizontal="center", vertical="center")
-            cell5.fill = header_fill_2
-            cell5.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
-            cell5.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            
-        ws.row_dimensions[4].height = 22
-        ws.row_dimensions[5].height = 26
-        
-        current_r = 6
-        for r_type, vals in table_rows:
-            for c_idx, val in enumerate(vals, 1):
-                cell = ws.cell(row=current_r, column=c_idx)
-                cell.value = format_cell_val(val) if c_idx > 1 else val
-                cell.border = thin_border
-                
-                if c_idx == 1:
-                    cell.alignment = Alignment(horizontal="left", vertical="center")
-                else:
-                    cell.alignment = Alignment(horizontal="right", vertical="center")
-                    
-                if r_type == 'category':
-                    cell.fill = cat_fill
-                    cell.font = Font(name="Calibri", size=9, bold=True, color="1F4E79")
-                elif r_type == 'subtotal':
-                    cell.fill = subtotal_fill
-                    cell.font = Font(name="Calibri", size=9, bold=True)
-                elif r_type == 'summary':
-                    cell.fill = summary_fill
-                    cell.font = Font(name="Calibri", size=9, bold=True, color="805300")
-                else:
-                    cell.font = Font(name="Calibri", size=9)
-                    
-            if r_type == 'category':
-                ws.merge_cells(start_row=current_r, start_column=1, end_row=current_r, end_column=13)
-                
-            current_r += 1
-            
-        ws.column_dimensions['A'].width = 30
-        for col_letter in ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M']:
-            ws.column_dimensions[col_letter].width = 14
+        <div class="mt-4 pt-3.5 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <span>Excel Output:</span>
+          <div class="flex items-center gap-1.5 text-emerald-400 font-medium">
+            <i class="ph ph-files text-base"></i>
+            <span>Separate CC Sheets (1 Tab per Cost Center)</span>
+          </div>
+        </div>
+      </div>
 
-elif is_consolidated:
-    def is_numbered_header_row(line_clean):
-        cleaned = re.sub(r'[^0-9\\s]', ' ', line_clean)
-        nums = [int(n) for n in re.findall(r'\\b\\d+\\b', cleaned)]
-        if nums and nums[:5] == [1, 2, 3, 4, 5]:
-            return True
-        if len(nums) >= 10 and all(nums[i] < nums[i+1] for i in range(len(nums)-1)):
-            return True
-        return False
+      <!-- Drag & Drop Upload Card -->
+      <div class="lg:col-span-7 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl ring-1 ring-white/5">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <i class="ph ph-upload-simple"></i> Step 2: Upload .txt File
+            </span>
+            <span id="fileSizeBadge" class="text-xs text-slate-400"></span>
+          </div>
 
-    pages = re.split(r'\\f|(?=X00\\s+SAIL/RSP\\s+CONSOLIDATED)|(?=@?\\s*SAIL\\s*/?\\s*RSP\\s+MONTHLY\\s+COST\\s+STATEMENT)', raw_clean)
-    cost_centers = {}
-    cc_order = []
+          <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/80 bg-slate-950/50 hover:bg-slate-950/90 transition-all rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[165px] group">
+            <input type="file" id="fileInput" accept=".txt,.prn,.dat,.log" class="hidden" />
+            <div class="w-12 h-12 rounded-full bg-slate-800 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 text-slate-400 flex items-center justify-center mb-2.5 transition transform group-hover:scale-105">
+              <i class="ph ph-cloud-arrow-up text-2xl"></i>
+            </div>
+            <p class="text-sm font-medium text-slate-200 group-hover:text-white">
+              Drag &amp; drop your <code class="text-emerald-400 font-bold">.txt</code> cost report here
+            </p>
+            <p class="text-xs text-slate-400 mt-1">or click to select from your computer</p>
+            <div class="flex flex-wrap items-center justify-center gap-2 mt-3 text-[11px] text-slate-500">
+              <span class="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">ele_display cons</span>
+              <span class="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">cs_rep_display</span>
+              <span class="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">grp_summ</span>
+              <span class="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">cum_cs</span>
+            </div>
+          </div>
+        </div>
 
-    boundaries_15 = [
-        (0, 31), (31, 41), (41, 54), (54, 69), (69, 83),
-        (83, 97), (97, 112), (112, 127), (127, 140), (140, 151),
-        (151, 162), (162, 174), (174, 186), (186, 198), (198, 220)
-    ]
+        <!-- File Active Bar -->
+        <div id="fileInfoBar" class="hidden mt-4 p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+              <i class="ph ph-file-text text-lg"></i>
+            </div>
+            <div class="truncate">
+              <div id="fileNameText" class="text-xs font-semibold text-emerald-200 truncate">report.txt</div>
+              <div id="fileStatsText" class="text-[11px] text-slate-400">0 KB • 0 lines</div>
+            </div>
+          </div>
+          <button id="clearFileBtn" title="Remove file" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition text-sm">
+            <i class="ph ph-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
 
-    dist_slices = [
-        (0, 40), (40, 70), (70, 86), (86, 112), (112, 128),
-        (128, 145), (145, 163), (163, 181), (181, 205)
-    ]
+    <!-- Action & Status Bar -->
+    <div id="actionBar" class="hidden flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-xl">
+      <div class="flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">Format:</span>
+          <span id="activePresetBadge" class="text-xs font-mono font-semibold bg-emerald-950 text-emerald-300 border border-emerald-700 px-2.5 py-1 rounded-lg">
+            Element-wise Cost Statement
+          </span>
+        </div>
+        <div class="hidden sm:block h-4 w-px bg-slate-800"></div>
+        <div class="text-xs text-slate-400">
+          Parsed: <strong id="parsedStatsCount" class="text-slate-200 font-semibold">0 sheets, 0 rows</strong>
+        </div>
+      </div>
 
-    for page in pages:
-        page = page.strip()
-        if not page or ('CONSOLIDATED' not in page and 'MONTHLY COST STATEMENT' not in page):
-            continue
-            
-        cc_match = re.search(r'CC CODE\\s*:\\s*(\\w+)\\s+([^\\n\\r]+)', page)
-        if not cc_match:
-            continue
-            
-        cc_code = sanitize(cc_match.group(1))
-        cc_name, gross_prod = clean_cc_name_and_prod(sanitize(cc_match.group(2)))
-        
-        period_match = re.search(r'PERIOD:\\s*([^\\n\\r\\t]+)', page)
-        period = sanitize(period_match.group(1).split()[0]) if period_match else ""
-        
-        print_match = re.search(r'PRINT DATE:\\s*([^\\n\\r\\t ]+)', page)
-        print_date = sanitize(print_match.group(1)) if print_match else ""
-        
-        if cc_code not in cost_centers:
-            cost_centers[cc_code] = {
-                'cc_code': cc_code,
-                'cc_name': cc_name,
-                'period': period,
-                'print_date': print_date,
-                'gross_prod': gross_prod,
-                'cost_elements': [],
-                'cost_summary': [],
-                'distribution': []
-            }
-            cc_order.append(cc_code)
-            
-        mode = 'main'
-        for line in page.split('\\n'):
-            line_str = line.rstrip()
-            line_clean = line_str.strip()
-            if not line_clean:
-                continue
-                
-            if 'SAIL/RSP' in line_clean or 'CONSOLIDATED' in line_clean or 'PRINT DATE:' in line_clean or 'MONTHLY COST STATEMENT' in line_clean:
-                continue
-            if 'CC CODE:' in line_clean or 'CC CODE :' in line_clean or 'GROSS PRODN :' in line_clean or 'Page-' in line_clean or 'Page :' in line_clean or 'X04' in line_clean or 'X00' in line_clean:
-                continue
-            if is_numbered_header_row(line_clean):
-                continue
-            if not re.search(r'[A-Za-z0-9]', line_clean):
-                continue
-                
-            if 'COST/UNIT (Rs.)' in line_clean or line_clean.startswith('COST/UNIT'):
-                mode = 'cost_unit'
-                continue
-            if 'DISTRIBUTION' in line_clean:
-                mode = 'distribution'
-                continue
-            if 'C O S T   E L E M E N T S' in line_clean or 'AMOUNT' in line_clean or 'COST PER UNIT PRODUCTION' in line_clean or 'PER   UNIT' in line_clean:
-                continue
-            if 'To   Department' in line_clean or 'CBDI Rate' in line_clean:
-                continue
-            if line_clean.startswith('COST      Var cost'):
-                continue
-                
-            if mode == 'main':
-                if not re.search(r'\\d|NaN|Inf', line_clean):
-                    cost_centers[cc_code]['cost_elements'].append(('category', sanitize(line_clean)))
-                    continue
-                    
-                middle_has_num = bool(re.search(r'\\d', line_str[41:69])) if len(line_str) > 41 else False
-                if not middle_has_num:
-                    desc = sanitize(line_str[:69])
-                    unit = "-"
-                    rate = "-"
-                    qty = "-"
-                else:
-                    desc = sanitize(line_str[:31])
-                    unit = sanitize(line_str[31:41]) if len(line_str) > 31 else "-"
-                    rate = sanitize(line_str[41:54]) if len(line_str) > 41 else "-"
-                    qty  = sanitize(line_str[54:69]) if len(line_str) > 54 else "-"
-                    
-                vals = [desc if desc else "-", unit if unit else "-", rate if rate else "-", qty if qty else "-"]
-                for s, e in boundaries_15[4:]:
-                    val = sanitize(line_str[s:e]) if len(line_str) > s else ""
-                    vals.append(val if val else "-")
-                    
-                is_subtotal = any(k in desc.upper() for k in ["TOTAL", "SUB-TOT", "CBDI", "WORKS COST", "SUMMARY", "NET "])
-                cost_centers[cc_code]['cost_elements'].append(('subtotal' if is_subtotal else 'data', vals))
-                
-            elif mode == 'cost_unit':
-                res = parse_summary_by_end_position(line_str)
-                if res:
-                    cost_centers[cc_code]['cost_summary'].append(res)
-                
-            elif mode == 'distribution':
-                vals = [sanitize(line_str[s:e]) if len(line_str) > s else "" for s, e in dist_slices]
-                vals = [v if v else "-" for v in vals]
-                cost_centers[cc_code]['distribution'].append(vals)
+      <div class="flex items-center gap-3">
+        <button id="previewRawBtn" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 transition">
+          <i class="ph ph-code"></i> View Raw TXT
+        </button>
+        <button id="downloadXlsxBtn" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition transform active:scale-95">
+          <i class="ph ph-download-simple text-lg font-bold"></i> Download .XLSX Excel
+        </button>
+      </div>
+    </div>
 
-    for idx, cc_code in enumerate(cc_order):
-        item = cost_centers[cc_code]
-        ws = create_named_sheet(wb, default_sheet, idx == 0, item['cc_code'], item['cc_name'])
-        
-        meta_text = (
-            f"Period : {item['period']}    Print Date : {item['print_date']}\\n"
-            f"CC CODE : {item['cc_code']}    CC NAME : {item['cc_name']}\\n"
-            f"Gross Production : {item['gross_prod']} TONNE"
-        )
-        
-        ws['A1'] = "COST STATEMENT (15-COLUMN)"
-        ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
-        ws['A2'] = meta_text
-        ws['A2'].font = Font(name="Calibri", size=10)
-        ws['A2'].alignment = Alignment(wrap_text=True, vertical="top")
-        ws.row_dimensions[2].height = 45
-        ws.merge_cells('A2:O2')
-        
-        fill_meta = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
-        for r in range(1, 3):
-            for c in range(1, 16):
-                ws.cell(row=r, column=c).fill = fill_meta
+    <!-- Sheet Tabs & Table Preview -->
+    <div id="previewContainer" class="hidden flex-1 bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl min-h-[480px]">
+      
+      <!-- Sheet Tabs Header -->
+      <div class="bg-slate-950 border-b border-slate-800 px-4 pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-table text-emerald-400"></i>
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-300">Data Preview &amp; Workbook Sheets</span>
+        </div>
+        <!-- Tab List with horizontal scroll -->
+        <div id="sheetTabsList" class="flex items-center gap-1.5 overflow-x-auto max-w-full sm:max-w-2xl custom-scrollbar pb-1">
+          <!-- Dynamic sheet tabs injected here -->
+        </div>
+      </div>
 
-        ws['A4'] = "Line Item"
-        ws['B4'] = "Unit"
-        ws['C4'] = "Rate"
-        ws['D4'] = "Input Quantity"
-        ws.merge_cells('E4:I4')
-        ws['E4'] = "AMOUNT ('000 Rs.)"
-        ws.merge_cells('J4:N4')
-        ws['J4'] = "COST PER UNIT PRODUCTION (Rs.)"
-        ws['O4'] = "Usage *1000"
-        
-        headers_sub = [
-            "COST ELEMENTS", "UNIT", "RUPEES/UNIT", "QUANTITY",
-            "VARIABLE", "FIXED", "TOTAL", "DEPRECN.", "I W C",
-            "VARIABLE", "FIXED", "TOTAL", "DEPRECN.", "I W C",
-            "USAGE * 1,000"
-        ]
-        
-        for c_idx, subh in enumerate(headers_sub, 1):
-            cell4 = ws.cell(row=4, column=c_idx)
-            cell5 = ws.cell(row=5, column=c_idx, value=subh)
-            cell4.fill = header_fill_1
-            cell4.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-            cell4.alignment = Alignment(horizontal="center", vertical="center")
-            cell5.fill = header_fill_2
-            cell5.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
-            cell5.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            
-        ws.row_dimensions[4].height = 22
-        ws.row_dimensions[5].height = 26
-        
-        current_r = 6
-        for r_type, r_data in item['cost_elements']:
-            if r_type == 'category':
-                cell = ws.cell(row=current_r, column=1, value=r_data)
-                cell.fill = cat_fill
-                cell.font = Font(name="Calibri", size=9, bold=True, color="1F4E79")
-                cell.border = thin_border
-                ws.merge_cells(start_row=current_r, start_column=1, end_row=current_r, end_column=15)
-                current_r += 1
-                continue
-                
-            for c_idx, val in enumerate(r_data, 1):
-                cell = ws.cell(row=current_r, column=c_idx)
-                cell.value = format_cell_val(val) if c_idx > 2 else val
-                cell.border = thin_border
-                
-                if c_idx == 1:
-                    cell.alignment = Alignment(horizontal="left", vertical="center")
-                elif c_idx == 2:
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                else:
-                    cell.alignment = Alignment(horizontal="right", vertical="center")
-                    
-                if r_type == 'subtotal':
-                    cell.fill = subtotal_fill
-                    cell.font = Font(name="Calibri", size=9, bold=True)
-                else:
-                    cell.font = Font(name="Calibri", size=9)
-                    
-            current_r += 1
-            
-        if item['cost_summary']:
-            current_r += 1
-            ws.cell(row=current_r, column=1, value="COST / UNIT SUMMARY (Rs.)").font = Font(name="Calibri", size=10, bold=True, color="1F4E79")
-            current_r += 1
-            
-            cu_headers = ["COST", "Var cost", "Fixed Cost", "CBDI Cost", "I W C", "Works Cost", "Deprecn.", "I N T", "Total Cost"]
-            for c_idx, h in enumerate(cu_headers, 1):
-                cell = ws.cell(row=current_r, column=c_idx, value=h)
-                cell.fill = header_fill_3
-                cell.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-            current_r += 1
-            
-            for row_vals in item['cost_summary']:
-                for c_idx, val in enumerate(row_vals, 1):
-                    cell = ws.cell(row=current_r, column=c_idx)
-                    cell.value = format_cell_val(val) if c_idx > 1 else val
-                    cell.border = thin_border
-                    cell.alignment = Alignment(horizontal="left" if c_idx == 1 else "right", vertical="center")
-                    cell.font = Font(name="Calibri", size=9, bold=(c_idx==1))
-                current_r += 1
-                
-        if item['distribution']:
-            current_r += 1
-            ws.cell(row=current_r, column=1, value="DISTRIBUTION").font = Font(name="Calibri", size=10, bold=True, color="1F4E79")
-            current_r += 1
-            
-            dist_headers = ["To Department", "Product", "CBDI Rate", "Quantity", "Var cost", "Fixed Cost", "Tot CBDI Cost", "Depreciation", "I W C"]
-            for c_idx, h in enumerate(dist_headers, 1):
-                cell = ws.cell(row=current_r, column=c_idx, value=h)
-                cell.fill = header_fill_3
-                cell.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-            current_r += 1
-            
-            for row_vals in item['distribution']:
-                is_dist_tot = (row_vals[0] == "TOTAL")
-                for c_idx, val in enumerate(row_vals, 1):
-                    cell = ws.cell(row=current_r, column=c_idx)
-                    cell.value = format_cell_val(val) if c_idx > 2 else val
-                    cell.border = thin_border
-                    cell.alignment = Alignment(horizontal="left" if c_idx in [1, 2] else "right", vertical="center")
-                    if is_dist_tot:
-                        cell.fill = subtotal_fill
-                        cell.font = Font(name="Calibri", size=9, bold=True)
-                    else:
-                        cell.font = Font(name="Calibri", size=9)
-                current_r += 1
+      <!-- Table View Area -->
+      <div class="flex-1 overflow-auto custom-scrollbar bg-slate-950/60 p-4" style="max-height: 550px;">
+        <table id="previewTable" class="w-full text-left text-xs border-collapse font-mono">
+          <thead id="previewThead" class="sticky top-0 bg-slate-900 text-slate-300 border-b border-slate-700 z-10 shadow-sm">
+            <!-- Headers injected here -->
+          </thead>
+          <tbody id="previewTbody" class="divide-y divide-slate-800/60 text-slate-300">
+            <!-- Rows injected here -->
+          </tbody>
+        </table>
+      </div>
 
-        ws.column_dimensions['A'].width = 34
-        ws.column_dimensions['B'].width = 24
-        for col_letter in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O']:
-            ws.column_dimensions[col_letter].width = 14
+      <!-- Table Footer / Row counter -->
+      <div class="bg-slate-950 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between text-xs text-slate-400">
+        <div id="sheetMetaText">Showing sheet 1 of 1</div>
+        <div class="text-[11px] text-slate-500 flex items-center gap-2">
+          <i class="ph ph-check-circle text-emerald-400"></i>
+          <span>Values parsed with exact character offsets &amp; native number formats</span>
+        </div>
+      </div>
+    </div>
 
-else:
-    pages = re.split(r'\\f|(?=X03\\s+SAIL / RSP\\s+ELEMENT-WISE\\s+COST STATEMENT)', raw_clean)
+    <!-- Raw Text Modal -->
+    <div id="rawTextModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="font-bold text-sm text-slate-200 flex items-center gap-2">
+            <i class="ph ph-file-text text-emerald-400"></i> Raw Text Viewer
+          </h3>
+          <button id="closeRawModal" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+            <i class="ph ph-x text-lg"></i>
+          </button>
+        </div>
+        <pre id="rawTextContent" class="p-4 text-xs font-mono text-slate-300 bg-slate-950 overflow-auto flex-1 custom-scrollbar leading-relaxed whitespace-pre"></pre>
+      </div>
+    </div>
 
-    cost_centers = {}
-    cc_order = []
+  </main>
 
-    slices = [
-        (0, 45), (45, 58), (58, 73), (73, 93), (93, 109),
-        (109, 127), (127, 145), (145, 161), (161, 176), (176, 220)
-    ]
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-4 text-center text-xs text-slate-500">
+    SAIL / RSP Cost Sheet Converter • Character-Aligned Parser • SheetJS
+  </footer>
 
-    for page in pages:
-        page = page.strip()
-        if not page or 'COST STATEMENT' not in page:
-            continue
-            
-        cc_match = re.search(r'CC CODE\\s*:\\s*(\\w+)\\s+([^\\n\\r]+)', page)
-        if not cc_match:
-            continue
-            
-        cc_code = sanitize(cc_match.group(1))
-        cc_name, gross_prod = clean_cc_name_and_prod(sanitize(cc_match.group(2)))
-        
-        period_match = re.search(r'PERIOD\\s*:\\s*([^\\n\\r(]+)', page)
-        period = sanitize(period_match.group(1).strip()) if period_match else ""
-        
-        prep_match = re.search(r'PREPARED ON\\s*:\\s*([^\\n\\r\\t]+)', page)
-        prepared_on = sanitize(prep_match.group(1).strip()) if prep_match else ""
-        
-        if cc_code not in cost_centers:
-            cost_centers[cc_code] = {
-                'cc_code': cc_code,
-                'cc_name': cc_name,
-                'period': period,
-                'prepared_on': prepared_on,
-                'gross_prod': gross_prod,
-                'lines': []
-            }
-            cc_order.append(cc_code)
-            
-        for line in page.split('\\n'):
-            line_str = line.rstrip()
-            line_clean = line_str.strip()
-            if not line_clean:
-                continue
-            if 'SAIL / RSP' in line_clean or 'ELEMENT-WISE' in line_clean or 'COST STATEMENT' in line_clean:
-                continue
-            if 'CC CODE :' in line_clean or 'Gross Production:' in line_clean or 'Page -' in line_clean:
-                continue
-            if 'ELEMENT DESCRIPTION' in line_clean or 'FIXED-COST' in line_clean or '*1000' in line_clean:
-                continue
-            if not re.search(r'[A-Za-z0-9]', line_clean):
-                continue
-                
-            desc = sanitize(line_str[:45])
-            rest = sanitize(line_str[45:])
-            
-            if not desc and not rest:
-                continue
-            if not desc and rest:
-                continue
-            if not rest:
-                cost_centers[cc_code]['lines'].append(('category', desc))
-                continue
-                
-            cols = [desc]
-            for start, end in slices[1:]:
-                val = sanitize(line_str[start:end]) if len(line_str) > start else ""
-                cols.append(val if val else "-")
-                
-            is_subtotal = "TOTAL" in desc.upper()
-            cost_centers[cc_code]['lines'].append(('subtotal' if is_subtotal else 'data', cols))
+  <!-- Application Logic -->
+  <script>
+    let rawFileContent = "";
+    let currentFileName = "Cost_Report";
+    let detectedType = "generic";
+    let workbookData = { sheets: [] };
+    let activeSheetIndex = 0;
 
-    for idx, cc_code in enumerate(cc_order):
-        item = cost_centers[cc_code]
-        ws = create_named_sheet(wb, default_sheet, idx == 0, item['cc_code'], item['cc_name'])
-        
-        meta_text = (
-            f"Period : {item['period']}    Prepared On : {item['prepared_on']}\\n"
-            f"CC CODE : {item['cc_code']}    CC NAME : {item['cc_name']}\\n"
-            f"Gross Production : {item['gross_prod']} Tonnes"
-        )
-        
-        ws['A1'] = "ELEMENT-WISE COST STATEMENT (10-COLUMN)"
-        ws['A1'].font = Font(name="Calibri", size=11, bold=True, color="1F4E79")
-        ws['A2'] = meta_text
-        ws['A2'].font = Font(name="Calibri", size=10)
-        ws['A2'].alignment = Alignment(wrap_text=True, vertical="top")
-        ws.row_dimensions[2].height = 45
-        ws.merge_cells('A2:J2')
-        
-        fill_meta = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
-        for r in range(1, 3):
-            for c in range(1, 11):
-                ws.cell(row=r, column=c).fill = fill_meta
+    const PRESET_INFO = {
+      auto: {
+        title: "✨ Auto-Detection",
+        desc: "Analyzes headers, keywords, and column structures to apply the exact fixed-width column boundaries."
+      },
+      ele_display: {
+        title: "Element-wise Cost Statement (10-Column)",
+        desc: "Character-aligned fixed positions: ELEMENT DESCRIPTION (0-45), RATE (45-57), QUANTITY (57-73), VAR-COST (73-91), FIXED-COST (91-106), TOTAL-COST (106-124), VAR/UNIT (124-141), FIXED/UNIT (141-157), TOTAL/UNIT (157-174), USAGE (174+)."
+      },
+      cs_rep_cons: {
+        title: "Consolidated Cost Statement (15-Column)",
+        desc: "Character-aligned 15-column layout: Cost Elements, Unit, Rate, Quantity, Amounts ('000 Rs), Cost/Unit, Usage * 1000, plus Distribution table."
+      },
+      cs_rep_monthly: {
+        title: "Monthly Cost Statement (15-Column)",
+        desc: "Character-aligned 15-column layout for monthly cost center runs with Gross Production and Distribution allocations."
+      },
+      grp_summ: {
+        title: "Groupwise Summary of Expenses",
+        desc: "Parses Expense Code (0-6), Description (6-46), Unit (46-62), Rate (62-72), Quantity (72-86), Variable Cost (86-103), Fixed Cost (103-118), Total Cost (118+)."
+      },
+      cum_cs: {
+        title: "Cumulative Cost Sheet (14-Column)",
+        desc: "Parses CC Code, Unit, Rate (cbdi), Input Qty, Amounts ('000 Rs), and Cost Per Unit Production."
+      },
+      new_var: {
+        title: "Cost Variance Report",
+        desc: "Comparative double-period matrix: Period 1, Period 2, and Variance delta calculations."
+      },
+      generic: {
+        title: "Smart Auto-Delimited Tabular",
+        desc: "Fallback splitter based on multi-space column boundaries."
+      }
+    };
 
-        headers = [
-            "ELEMENT DESCRIPTION", "RATE", "QUANTITY", "VAR-COST", "FIXED-COST", 
-            "TOTAL-COST", "VAR/UNIT", "FIXED/UNIT", "TOTAL/UNIT", "USAGE *1000"
-        ]
-        
-        for c_idx, head in enumerate(headers, 1):
-            cell = ws.cell(row=4, column=c_idx, value=head)
-            cell.fill = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
-            cell.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            
-        ws.row_dimensions[4].height = 25
-        
-        current_r = 5
-        for r_type, r_data in item['lines']:
-            if r_type == 'category':
-                cell = ws.cell(row=current_r, column=1, value=r_data)
-                cell.fill = cat_fill
-                cell.font = Font(name="Calibri", size=9, bold=True, color="1F4E79")
-                cell.border = thin_border
-                ws.merge_cells(start_row=current_r, start_column=1, end_row=current_r, end_column=10)
-                current_r += 1
-                continue
-                
-            for c_idx, val in enumerate(r_data, 1):
-                cell = ws.cell(row=current_r, column=c_idx)
-                cell.value = format_cell_val(val) if c_idx > 1 else val
-                cell.border = thin_border
-                
-                if c_idx == 1:
-                    cell.alignment = Alignment(horizontal="left", vertical="center")
-                else:
-                    cell.alignment = Alignment(horizontal="right", vertical="center")
-                    
-                if r_type == 'subtotal':
-                    cell.fill = subtotal_fill
-                    cell.font = Font(name="Calibri", size=9, bold=True)
-                else:
-                    cell.font = Font(name="Calibri", size=9)
-                    
-            current_r += 1
-            
-        ws.column_dimensions['A'].width = 34
-        for col_letter in ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
-            ws.column_dimensions[col_letter].width = 15
+    // DOM Elements
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const reportTypeSelect = document.getElementById("reportTypeSelect");
+    const typeDescription = document.getElementById("typeDescription");
+    const detectedBadge = document.getElementById("detectedBadge");
+    const fileInfoBar = document.getElementById("fileInfoBar");
+    const fileNameText = document.getElementById("fileNameText");
+    const fileStatsText = document.getElementById("fileStatsText");
+    const clearFileBtn = document.getElementById("clearFileBtn");
+    const actionBar = document.getElementById("actionBar");
+    const activePresetBadge = document.getElementById("activePresetBadge");
+    const parsedStatsCount = document.getElementById("parsedStatsCount");
+    const previewContainer = document.getElementById("previewContainer");
+    const sheetTabsList = document.getElementById("sheetTabsList");
+    const previewThead = document.getElementById("previewThead");
+    const previewTbody = document.getElementById("previewTbody");
+    const sheetMetaText = document.getElementById("sheetMetaText");
+    const downloadXlsxBtn = document.getElementById("downloadXlsxBtn");
+    const previewRawBtn = document.getElementById("previewRawBtn");
+    const rawTextModal = document.getElementById("rawTextModal");
+    const rawTextContent = document.getElementById("rawTextContent");
+    const closeRawModal = document.getElementById("closeRawModal");
 
-out_buffer = io.BytesIO()
-wb.save(out_buffer)
-out_bytes = out_buffer.getvalue()
-`
+    reportTypeSelect.addEventListener("change", (e) => {
+      updatePresetDescription(e.target.value);
+      if (rawFileContent) processContent();
+    });
 
-    try {
-      await pyodide.runPythonAsync(pythonScript);
-      const outBytes = pyodide.globals.get("out_bytes").toJs();
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("border-emerald-500", "bg-slate-950/90");
+    });
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("border-emerald-500", "bg-slate-950/90");
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("border-emerald-500", "bg-slate-950/90");
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFileUpload(e.dataTransfer.files[0]);
+      }
+    });
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleFileUpload(e.target.files[0]);
+      }
+    });
 
-      const blob = new Blob([outBytes], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const downloadUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = file.name.replace(".txt", "") + "_Report.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    clearFileBtn.addEventListener("click", resetFileState);
+    previewRawBtn.addEventListener("click", () => {
+      rawTextContent.textContent = rawFileContent;
+      rawTextModal.classList.remove("hidden");
+    });
+    closeRawModal.addEventListener("click", () => rawTextModal.classList.add("hidden"));
+    rawTextModal.addEventListener("click", (e) => {
+      if (e.target === rawTextModal) rawTextModal.classList.add("hidden");
+    });
+    downloadXlsxBtn.addEventListener("click", exportToExcel);
 
-      statusEl.textContent = "Conversion Complete! File downloaded.";
-      statusEl.style.color = "#16a34a";
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent = "Error processing file: " + err.message;
-      statusEl.style.color = "#dc2626";
+    function updatePresetDescription(typeKey) {
+      const info = PRESET_INFO[typeKey] || PRESET_INFO.generic;
+      typeDescription.innerHTML = `
+        <p class="font-medium text-slate-200 flex items-center gap-1.5"><i class="ph ph-info text-emerald-400"></i> ${info.title}</p>
+        <p class="text-slate-400 mt-1">${info.desc}</p>
+      `;
     }
-  }
-</script>
 
+    function resetFileState() {
+      rawFileContent = "";
+      fileInput.value = "";
+      fileInfoBar.classList.add("hidden");
+      actionBar.classList.add("hidden");
+      previewContainer.classList.add("hidden");
+      detectedBadge.classList.add("hidden");
+      workbookData = { sheets: [] };
+    }
+
+    function handleFileUpload(file) {
+      currentFileName = file.name.replace(/\.[^/.]+$/, "");
+      fileNameText.textContent = file.name;
+      const sizeKB = (file.size / 1024).toFixed(1);
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        rawFileContent = evt.target.result;
+        const lineCount = rawFileContent.split(/\r?\n/).length;
+        fileStatsText.textContent = `${sizeKB} KB • ${lineCount.toLocaleString()} lines`;
+        fileInfoBar.classList.remove("hidden");
+        processContent();
+      };
+      reader.readAsText(file, "ISO-8859-1");
+    }
+
+    function detectReportType(text) {
+      if (/ELEMENT-WISE\s+COST\s+STATEMENT/i.test(text) || text.includes("ele_display")) {
+        return "ele_display";
+      }
+      if (/CONSOLIDATED\s*\(\s*AFTER\s*A\/C\s*CLOSING\s*\)/i.test(text) || (text.includes("cs_rep_display") && text.includes("cons final"))) {
+        return "cs_rep_cons";
+      }
+      if (/MONTHLY\s+COST\s+STATEMENT/i.test(text) || (/CC\s+CODE\s*:/i.test(text) && /C\s*O\s*S\s*T\s+E\s*L\s*E\s*M\s*E\s*N\s*T\s*S/i.test(text))) {
+        return "cs_rep_monthly";
+      }
+      if (/GROUPWISE\s+SUMMARY\s+OF\s+EXPENSES/i.test(text) || text.includes("grp_summ")) {
+        return "grp_summ";
+      }
+      if (/CUMULATIVE\s+COST\s+SHEET/i.test(text) || text.includes("cum_cs")) {
+        return "cum_cs";
+      }
+      if (/COST\s+VARIANCE\s+REPORT/i.test(text) || /Variance\s+Period1/i.test(text) || text.includes("new_var")) {
+        return "new_var";
+      }
+      return "generic";
+    }
+
+    function cleanNumber(val) {
+      if (typeof val !== "string") return val;
+      let s = val.trim();
+      if (!s || s === "-" || s === "---" || s === "." || s === ",") return "";
+      
+      let negative = false;
+      if (s.endsWith("-")) {
+        negative = true;
+        s = s.slice(0, -1).trim();
+      } else if (s.startsWith("-")) {
+        negative = true;
+        s = s.slice(1).trim();
+      }
+
+      const pure = s.replace(/,/g, "");
+      if (/^\d+(\.\d+)?$/.test(pure)) {
+        const num = parseFloat(pure);
+        return negative ? -num : num;
+      }
+      return val.trim();
+    }
+
+    function sanitizeText(val) {
+      if (typeof val !== "string") return val;
+      return val.replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
+    }
+
+    function anyMatch(str, list) {
+      return list.some(k => str.includes(k));
+    }
+
+    function processContent() {
+      if (!rawFileContent) return;
+
+      const selectedType = reportTypeSelect.value;
+      detectedType = detectReportType(rawFileContent);
+
+      if (selectedType === "auto") {
+        detectedBadge.classList.remove("hidden");
+        const detectedName = PRESET_INFO[detectedType]?.title || detectedType;
+        detectedBadge.textContent = "Auto: " + detectedName;
+      } else {
+        detectedBadge.classList.add("hidden");
+      }
+
+      const activeParserType = selectedType === "auto" ? detectedType : selectedType;
+      activePresetBadge.textContent = PRESET_INFO[activeParserType]?.title || activeParserType;
+
+      workbookData = parseReport(rawFileContent, activeParserType);
+
+      actionBar.classList.remove("hidden");
+      previewContainer.classList.remove("hidden");
+
+      let totalRows = workbookData.sheets.reduce((acc, s) => acc + s.rows.length, 0);
+      parsedStatsCount.textContent = `${workbookData.sheets.length} sheet(s), ${totalRows.toLocaleString()} rows`;
+
+      renderSheetTabs();
+      switchSheet(0);
+    }
+
+    function parseReport(text, type) {
+      switch (type) {
+        case "ele_display":
+          return parseEleDisplayFixed(text);
+        case "cs_rep_cons":
+        case "cs_rep_monthly":
+          return parseCsRepFixed(text, type === "cs_rep_cons" ? "Consolidated" : "Monthly");
+        case "grp_summ":
+          return parseGroupSummaryFixed(text);
+        case "cum_cs":
+          return parseCumCsFixed(text);
+        case "new_var":
+          return parseNewVarFixed(text);
+        case "generic":
+        default:
+          return parseGenericFixed(text);
+      }
+    }
+
+    // 1. ELEMENT-WISE COST STATEMENT (EXACT CHARACTER SLICE PARSER)
+    // Slices:
+    // ELEMENT DESCRIPTION: 0..45
+    // RATE:                45..57
+    // QUANTITY:            57..73
+    // VAR-COST:            73..91
+    // FIXED-COST:          91..106
+    // TOTAL-COST:          106..124
+    // VAR/UNIT:            124..141
+    // FIXED/UNIT:          141..157
+    // TOTAL/UNIT:          157..174
+    // USAGE *1000:         174..200
+    function parseEleDisplayFixed(text) {
+      const lines = text.split(/\r?\n/);
+      const dataHeaders = [
+        "Element Description",
+        "Rate", "Quantity", "Var-Cost", "Fixed-Cost", "Total-Cost",
+        "Var/Unit", "Fixed/Unit", "Total/Unit", "Usage * 1000"
+      ];
+
+      const ccMap    = new Map();  // cc -> rows[]
+      const ccInfoMap = new Map(); // cc -> {ccName, prodn, period}
+      let curCC = "", curCCName = "", curProdn = "", curPeriod = "";
+
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+        if (!line.trim()) continue;
+
+        if (line.includes("PERIOD :") || line.includes("PERIOD:")) {
+          const pm = line.match(/PERIOD\s*:\s*([\d\/\s]+)/i);
+          if (pm) curPeriod = sanitizeText(pm[1]);
+        }
+
+        if (line.includes("CC CODE :") || line.includes("CC CODE:")) {
+          const m = line.match(/CC\s*CODE\s*:\s*(\w+)\s+(.*)/i);
+          if (m) {
+            curCC = sanitizeText(m[1]);
+            const rest = m[2];
+            const gpMatch = rest.match(/^(.*?)\s*Gross\s*Production\s*:\s*([\d\.\,\s]+)\s*(?:Tonnes)?/i);
+            if (gpMatch) {
+              curCCName = sanitizeText(gpMatch[1]);
+              curProdn  = sanitizeText(gpMatch[2]);
+            } else {
+              curCCName = sanitizeText(rest).replace(/Page.*/i, "").trim();
+              curProdn  = "";
+            }
+            if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+            ccInfoMap.set(curCC, { ccName: curCCName, prodn: curProdn, period: curPeriod });
+            continue;
+          }
+        }
+
+        if (anyMatch(line, ["SAIL / RSP", "ELEMENT-WISE", "ELEMENT DESCRIPTION", "FIXED-COST", "*1000", "---", "VAR-COST", "TOTAL-COST", "VAR/UNIT", "FIXED/UNIT", "TOTAL/UNIT"])) continue;
+        if (!/[A-Za-z0-9]/.test(line.trim())) continue;
+
+        // Skip category/subcategory header lines (nothing numeric after col 45)
+        const restRaw = line.length > 45 ? line.slice(45) : "";
+        if (!/[\d]/.test(restRaw)) continue;
+
+        const desc = sanitizeText(line.slice(0, 45));
+        const rate = sanitizeText(line.slice(45, 57));
+        const qty  = sanitizeText(line.slice(57, 73));
+        const vc   = sanitizeText(line.slice(73, 91));
+        const fc   = sanitizeText(line.slice(91, 106));
+        const tc   = sanitizeText(line.slice(106, 124));
+        const vu   = sanitizeText(line.slice(124, 141));
+        const fu   = sanitizeText(line.slice(141, 157));
+        const tu   = sanitizeText(line.slice(157, 174));
+        const usg  = sanitizeText(line.slice(174, 200));
+
+        if (desc || vc || tc) {
+          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          ccMap.get(curCC).push([
+            desc,
+            cleanNumber(rate), cleanNumber(qty),
+            cleanNumber(vc), cleanNumber(fc), cleanNumber(tc),
+            cleanNumber(vu), cleanNumber(fu), cleanNumber(tu),
+            cleanNumber(usg)
+          ]);
+        }
+      }
+
+      const sheets = [];
+      for (const [cc, rows] of ccMap.entries()) {
+        const info = ccInfoMap.get(cc) || {};
+        // 2-row info header then column headers then data
+        const infoRows = [
+          [`CC Code: ${cc}`, `CC Name: ${info.ccName || ""}`, `Period: ${info.period || ""}`, `Gross Production: ${info.prodn || ""}`],
+          []
+        ];
+        const allRows = [...infoRows, dataHeaders, ...rows];
+        sheets.push({ name: `CC_${cc}`.substring(0, 31), headers: [], rows: allRows, infoRowCount: 2 });
+      }
+
+      return { sheets: sheets.length > 0 ? sheets : [{ name: "Element_Cost", headers: dataHeaders, rows: [], infoRowCount: 0 }] };
+    }
+
+    // 2. CONSOLIDATED & MONTHLY COST STATEMENT (15-COLUMN FIXED-SLICE PARSER)
+    // Slices:
+    // Col 1: Cost Elements      (0..31)
+    // Col 2: Unit               (31..44)
+    // Col 3: Rate (Rupees/Unit) (44..56)
+    // Col 4: Input Quantity     (56..73)
+    // Col 5: Var Cost ('000)    (73..86)
+    // Col 6: Fixed Cost ('000)  (86..100)
+    // Col 7: Total Cost ('000)  (100..115)
+    // Col 8: Deprecn ('000)     (115..129)
+    // Col 9: IWC ('000)         (129..140)
+    // Col 10: Var Cost/Unit     (140..151)
+    // Col 11: Fixed Cost/Unit   (151..162)
+    // Col 12: Total Cost/Unit   (162..173)
+    // Col 13: Deprecn/Unit      (173..184)
+    // Col 14: IWC/Unit          (184..193)
+    // Col 15: Usage * 1000      (193..220)
+    function parseCsRepFixed(text, statementType) {
+      const lines = text.split(/\r?\n/);
+      const dataHeaders = [
+        "Cost Element", "Unit", "Rate (Rs/Unit)", "Input Quantity",
+        "Variable Cost ('000)", "Fixed Cost ('000)", "Total Cost ('000)", "Deprecn ('000)", "IWC ('000)",
+        "Var Cost/Unit", "Fixed Cost/Unit", "Total Cost/Unit", "Deprecn/Unit", "IWC/Unit", "Usage * 1000"
+      ];
+
+      const distHeaders = [
+        "To Department", "Product", "CBDI Rate", "Quantity", "Var Cost", "Fixed Cost", "Tot CBDI Cost", "Depreciation", "IWC"
+      ];
+
+      const ccMap = new Map();
+      const ccInfoMap = new Map();
+      const distMap = new Map();
+      const costPerUnitMap = new Map();
+
+      let curCC = "", curCCName = "", curProdn = "", curPeriod = "", curPrintDate = "";
+      let curCat = "", curSubCat = "";
+      let inDistribution = false;
+      let inSummary = false;
+      let inTechStats = false;
+      let inOverallSummary = false;  // skip the plant-level summary table at end
+
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+        if (!line.trim()) continue;
+
+        if (line.includes("PERIOD:") || line.includes("PERIOD :")) {
+          const pm = line.match(/PERIOD\s*:\s*([^\sP]+)/i);
+          if (pm) curPeriod = sanitizeText(pm[1]);
+          const dm = line.match(/PRINT DATE\s*:\s*([^\sP]+)/i);
+          if (dm) curPrintDate = sanitizeText(dm[1]);
+        }
+
+        if (line.includes("CC CODE:") || line.includes("CC CODE :")) {
+          const m = line.match(/CC\s*CODE\s*:\s*(\w+)\s+([^\[\n]+)/i);
+          if (m) {
+            curCC = sanitizeText(m[1]);
+            curCCName = sanitizeText(m[2]);
+            curProdn = "";
+            const pm = line.match(/GROSS\s*PRODN\s*:\s*([\d\.\,]+)/i);
+            if (pm) curProdn = sanitizeText(pm[1]);
+            inDistribution = false;
+            inSummary = false;
+            inOverallSummary = false;
+            curCat = "";
+            curSubCat = "";
+            if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+            if (!distMap.has(curCC)) distMap.set(curCC, []);
+            ccInfoMap.set(curCC, { ccName: curCCName, prodn: curProdn, period: curPeriod, printDate: curPrintDate });
+            continue;
+          }
+        }
+
+        if (line.includes("==================")) { inTechStats = !inTechStats; continue; }
+        if (inTechStats) continue;
+
+        // Skip the end-of-report plant-level summary table entirely
+        if (line.includes("COST   SHEET   SUMMARY") || line.includes("Page Nos.   CC") ||
+            line.includes("S A I L / R S P") || line.includes("MONTHLY   COST   SHEET")) {
+          inOverallSummary = true; continue;
+        }
+        if (inOverallSummary) {
+          // Resume normal parsing when a new CC starts (handled above) or end of file
+          continue;
+        }
+
+        if (line.includes("DISTRIBUTION") && !line.includes("To   Department")) {
+          inDistribution = true; inSummary = false; continue;
+        }
+        if (line.includes("COST/UNIT (Rs.)") || line.includes("COST/UNIT")) {
+          inSummary = true; inDistribution = false; continue;
+        }
+
+        if (inSummary) {
+          if (line.includes("SUMMARY")) {
+            const sRow = [
+              "SUMMARY",
+              cleanNumber(line.slice(11, 24)),
+              cleanNumber(line.slice(24, 39)),
+              cleanNumber(line.slice(39, 57)),
+              cleanNumber(line.slice(57, 66)),
+              cleanNumber(line.slice(66, 82)),
+              cleanNumber(line.slice(82, 98)),
+              cleanNumber(line.slice(98, 108)),
+              cleanNumber(line.slice(108, 130))
+            ];
+            if (curCC) costPerUnitMap.set(curCC, sRow);
+            inSummary = false;
+            continue;
+          } else if (line.includes("DISTRIBUTION") || anyMatch(line, ["SAIL/RSP", "MONTHLY COST", "CONSOLIDATED", "CC CODE"])) {
+            inSummary = false;
+          } else {
+            continue;
+          }
+        }
+
+        if (inDistribution) {
+          if (anyMatch(line, ["SAIL/RSP", "MONTHLY COST", "CONSOLIDATED", "CC CODE", "COST   SHEET   SUMMARY"])) {
+            inDistribution = false;
+          } else if (line.includes("TOTAL") && /[\d]/.test(line)) {
+            const dtTokens = [
+              line.slice(0, 40), line.slice(40, 72), line.slice(72, 95), line.slice(95, 115),
+              line.slice(115, 130), line.slice(130, 148), line.slice(148, 165), line.slice(165, 185), line.slice(185, 205)
+            ].map(s => sanitizeText(s));
+            if (curCC && distMap.has(curCC)) {
+              distMap.get(curCC).push(["TOTAL", "", "", cleanNumber(dtTokens[3]), cleanNumber(dtTokens[4]), cleanNumber(dtTokens[5]), cleanNumber(dtTokens[6]), cleanNumber(dtTokens[7]), cleanNumber(dtTokens[8])]);
+            }
+            inDistribution = false; continue;
+          } else if (line.includes("------") || line.includes("To   Department") || line.includes("======")) {
+            continue;
+          } else {
+            const toDept  = sanitizeText(line.slice(0, 40));
+            const prod    = sanitizeText(line.slice(40, 72));
+            const cbdiR   = sanitizeText(line.slice(72, 95));
+            const qty     = sanitizeText(line.slice(95, 115));
+            const vc      = sanitizeText(line.slice(115, 130));
+            const fc      = sanitizeText(line.slice(130, 148));
+            const totCbdi = sanitizeText(line.slice(148, 165));
+            const depn    = sanitizeText(line.slice(165, 185));
+            const iwc     = sanitizeText(line.slice(185, 205));
+            if (toDept || qty || vc) {
+              if (curCC && distMap.has(curCC)) {
+                distMap.get(curCC).push([toDept, prod, cleanNumber(cbdiR), cleanNumber(qty), cleanNumber(vc), cleanNumber(fc), cleanNumber(totCbdi), cleanNumber(depn), cleanNumber(iwc)]);
+              }
+            }
+            continue;
+          }
+        }
+
+        if (anyMatch(line, ["SAIL/RSP", "MONTHLY COST", "CONSOLIDATED", "C O S T   E L E M E N T S", "PER   UNIT", "AMOUNT (", "COST PER UNIT", "1                 2", "------", "====", "COST      Var cost", "SUMMARY"])) continue;
+        if (!/[A-Za-z0-9]/.test(line.trim())) continue;
+
+        // Skip column-number header rows (like "1  2  3 ... 15" or box-enclosed variants)
+        if (/\b1\b\s+.*\b2\b\s+.*\b3\b\s+.*\b4\b\s+.*\b5\b/.test(line)) continue;
+        if (/[≥³≈√¿ƒ]/.test(line) && /^\s*[≥³≈√¿ƒ\s\d]+$/.test(line.replace(/[A-Za-z]/g, ''))) continue;
+
+        const elemRaw = line.length > 31 ? line.slice(0, 31) : line;
+        const restRaw = line.length > 31 ? line.slice(31) : "";
+        if (!/[\d]/.test(restRaw)) {
+          const t = elemRaw.trim();
+          if (t.length > 0 && !t.startsWith("Sub-") && !t.includes("1,000")) {
+            if (line.search(/\S/) <= 2) { curCat = t; curSubCat = ""; }
+            else { curSubCat = t; }
+            continue;
+          }
+        }
+
+        let elem = sanitizeText(line.slice(0, 31));
+        let unit = sanitizeText(line.slice(31, 44));
+        // Expand description to col 44 when:
+        //   (a) unit is empty, OR
+        //   (b) unit has no uppercase letters and no digits — meaning it's a continuation of
+        //       the description (e.g. the "t" in "Works Cost+Depn+Int"), not a real unit code
+        if (line.length > 31 && !/[\d]/.test(line.slice(31, 44)) && (!unit || !/[A-Z0-9]/.test(unit))) {
+          elem = sanitizeText(line.slice(0, 44));
+          unit = "";
+        }
+        const rate = sanitizeText(line.slice(44, 56));
+        const qty  = sanitizeText(line.slice(56, 73));
+        const vc   = sanitizeText(line.slice(73, 86));
+        const fc   = sanitizeText(line.slice(86, 100));
+        const tc   = sanitizeText(line.slice(100, 115));
+        const dep  = sanitizeText(line.slice(115, 129));
+        const iwc  = sanitizeText(line.slice(129, 140));
+        const vu   = sanitizeText(line.slice(140, 151));
+        const fu   = sanitizeText(line.slice(151, 162));
+        const tu   = sanitizeText(line.slice(162, 173));
+        const du   = sanitizeText(line.slice(173, 184));
+        const iu   = sanitizeText(line.slice(184, 193));
+        const usg  = sanitizeText(line.slice(193, 220));
+
+        if (elem || vc || tc) {
+          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          ccMap.get(curCC).push([
+            elem, unit,
+            cleanNumber(rate), cleanNumber(qty),
+            cleanNumber(vc), cleanNumber(fc), cleanNumber(tc), cleanNumber(dep), cleanNumber(iwc),
+            cleanNumber(vu), cleanNumber(fu), cleanNumber(tu), cleanNumber(du), cleanNumber(iu),
+            cleanNumber(usg)
+          ]);
+        }
+      }
+
+      const sheets = [];
+
+      const costPerUnitHeaders = [
+        "COST", "Var cost", "Fixed Cost", "CBDI Cost", "I W C", "Works Cost", "Deprecn.", "I N T", "Total Cost"
+      ];
+
+      // One sheet per CC with 2-row info header, cost elements, COST/UNIT summary, and DISTRIBUTION
+      for (const [cc, rows] of ccMap.entries()) {
+        const info = ccInfoMap.get(cc) || {};
+        const infoRows = [
+          [`CC Code: ${cc}`, `CC Name: ${info.ccName || ""}`, `Period: ${info.period || ""}`, `Gross Production: ${info.prodn || ""}`],
+          []
+        ];
+        const allRows = [...infoRows, dataHeaders, ...rows];
+
+        // Append COST/UNIT table if present for this CC
+        const cpuRow = costPerUnitMap.get(cc);
+        if (cpuRow) {
+          allRows.push([]);
+          allRows.push(["COST/UNIT (Rs.)"]);
+          allRows.push(costPerUnitHeaders);
+          allRows.push(cpuRow);
+        }
+
+        // Append DISTRIBUTION table if present for this CC
+        const ccDists = distMap.get(cc);
+        if (ccDists && ccDists.length > 0) {
+          allRows.push([]);
+          allRows.push(["DISTRIBUTION"]);
+          allRows.push(distHeaders);
+          ccDists.forEach(dr => allRows.push(dr));
+        }
+
+        sheets.push({ name: `CC_${cc}`.substring(0, 31), headers: [], rows: allRows, infoRowCount: 2 });
+      }
+
+      // Distributions sheet (combined across all CCs)
+      const allDistRows = [];
+      for (const [cc, dRows] of distMap.entries()) {
+        dRows.forEach(r => allDistRows.push([cc, ...r]));
+      }
+      if (allDistRows.length > 0) {
+        sheets.push({ name: "Distributions", headers: ["From CC", ...distHeaders], rows: allDistRows, infoRowCount: 0 });
+      }
+
+      return { sheets: sheets.length > 0 ? sheets : [{ name: "Cost_Statement", headers: dataHeaders, rows: [], infoRowCount: 0 }] };
+    }
+
+    // 3. GROUPWISE SUMMARY (EXACT CHARACTER-ALIGNED PARSER)
+    // Slices:
+    // EXP CODE:     0..6
+    // DESCRIPTION:  6..46
+    // UNIT:         46..62
+    // RATE:         62..72
+    // QUANTITY:     72..86
+    // VAR COST:     86..103
+    // FIXED COST:   103..118
+    // TOTAL COST:   118..145
+    function parseGroupSummaryFixed(text) {
+      const lines = text.split(/\r?\n/);
+      const headers = [
+        "Period", "Run Date",
+        "Exp Code", "Expense Description", "Unit", "Rate",
+        "Quantity", "Variable Cost", "Fixed Cost", "Total Cost"
+      ];
+
+      const rows = [];
+      let curPeriod = "", curRunDate = "";
+
+      for (let i = 0; i < lines.length; i++) {
+        // Expand tabs to spaces (tab stop = 8) BEFORE sanitizing control chars
+        let raw = lines[i];
+        let expanded = "";
+        let col = 0;
+        for (const ch of raw) {
+          if (ch === "\t") {
+            const spaces = 8 - (col % 8);
+            expanded += " ".repeat(spaces);
+            col += spaces;
+          } else {
+            expanded += ch;
+            col++;
+          }
+        }
+        let line = expanded.replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+        let lineClean = line.trim();
+        if (!lineClean) continue;
+
+        // Extract Period and Run Date — they appear on the same tab-separated header line
+        // e.g. "RUN-DATE : 07-aug-2026\t CS TYPE : Monthly\t PERIOD JULY      , 2026"
+        if (line.includes("PERIOD") || line.includes("RUN-DATE") || line.includes("RUN DATE")) {
+          const pd = line.match(/PERIOD\s+([A-Z]+\s*,?\s*\d{4})/i);
+          if (pd) curPeriod = sanitizeText(pd[1]);
+          const rd = line.match(/RUN[-\s]DATE\s*:\s*([0-9A-Za-z\-]+)/i);
+          if (rd) curRunDate = sanitizeText(rd[1]);
+          continue;
+        }
+
+        // Skip decoration / header rows
+        if (lineClean.startsWith("---") || lineClean.startsWith("===") ||
+            lineClean.startsWith("#####") || lineClean.startsWith("*****")) continue;
+        if (anyMatch(line, ["EXP   EXPENSE", "CODE", "SAIL/RSP", "GROUPWISE", "Page No"])) continue;
+        if (!/[A-Za-z0-9]/.test(lineClean)) continue;
+
+        // Skip pure category/sub-category header lines (followed by ##### or *****)
+        if (i + 1 < lines.length && (lines[i + 1].includes("#####") || lines[i + 1].includes("*****"))) {
+          i++; // skip the underline too
+          continue;
+        }
+
+        // Sub-group total — numbers come AFTER "---->" separated by whitespace (tabs expanded)
+        if (line.includes("Total for the Sub Group")) {
+          const afterArrow = line.slice(line.indexOf("---->") + 5);
+          const nums = (afterArrow.match(/-?[\d,]+\.?\d*/g) || []).map(n => cleanNumber(n));
+          rows.push([
+            curPeriod, curRunDate,
+            "-", "  SUBTOTAL (Sub Group)", "-", "-",
+            nums[0] ?? null, nums[1] ?? null, nums[2] ?? null, nums[3] ?? null
+          ]);
+          continue;
+        }
+
+        // Group total
+        if (line.includes("Total for the Group")) {
+          const afterArrow = line.slice(line.indexOf("---->") + 5);
+          const nums = (afterArrow.match(/-?[\d,]+\.?\d*/g) || []).map(n => cleanNumber(n));
+          rows.push([
+            curPeriod, curRunDate,
+            "-", "GROUP TOTAL", "-", "-",
+            nums[0] ?? null, nums[1] ?? null, nums[2] ?? null, nums[3] ?? null
+          ]);
+          continue;
+        }
+
+        // Data row: starts with expense code number (after tab-expansion, starts at col 0)
+        if (/^\s*\d+\s+/.test(line)) {
+          const lExp = line.padEnd(145);
+          const expCode = sanitizeText(lExp.slice(0, 6));
+          const desc    = sanitizeText(lExp.slice(6, 46));
+          const unit    = sanitizeText(lExp.slice(46, 62));
+          const rate    = sanitizeText(lExp.slice(62, 72));
+          const qty     = sanitizeText(lExp.slice(72, 86));
+          const vc      = sanitizeText(lExp.slice(86, 103));
+          const fc      = sanitizeText(lExp.slice(103, 118));
+          const tc      = sanitizeText(lExp.slice(118, 145));
+
+          rows.push([
+            curPeriod, curRunDate,
+            cleanNumber(expCode), desc, unit,
+            cleanNumber(rate), cleanNumber(qty),
+            cleanNumber(vc), cleanNumber(fc), cleanNumber(tc)
+          ]);
+        }
+      }
+
+      return {
+        sheets: [{ name: "Groupwise_Summary", headers: headers, rows: rows }]
+      };
+    }
+
+    // 4. CUMULATIVE COST SHEET (EXACT 15-COLUMN CHARACTER SLICE PARSER)
+    // Slices:
+    // 0..18   Cost Element
+    // 18..26  Unit
+    // 26..37  Rate Rupees (cbdi)
+    // 37..45  Input Qty
+    // 45..53  Var Cost
+    // 53..61  Fix Cost
+    // 61..70  CBDI Cost
+    // 70..78  IWC Cost
+    // 78..86  Depn Cost
+    // 86..95  Var Rate
+    // 95..103 Fix Rate
+    // 103..111 CBDI Rate
+    // 111..119 IWC Rate
+    // 119..126 Depn Rate
+    // 126..135 Usage * 1000
+    function parseCumCsFixed(text) {
+      const lines = text.split(/\r?\n/);
+      const headers = [
+        "CC Code", "CC Name",
+        "Cost Element", "Unit", "Rate (cbdi)", "Input Qty",
+        "Var Cost ('000)", "Fix Cost ('000)", "CBDI Cost ('000)", "IWC ('000)", "Depn ('000)",
+        "Var Rate", "Fix Rate", "CBDI Rate", "IWC Rate", "Depn Rate", "Usage * 1000"
+      ];
+
+      const distHeaders = [
+        "To CC", "Expense", "Rate (V+F)", "Quantity", "Var Cost", "Fixed Cost", "CBDI Cost", "IWC Cost", "Depn Cost", "Int Cost"
+      ];
+      const ccMap = new Map();
+      const distMap = new Map();
+      const costPerUnitMap = new Map();
+      let curCC = "", curCCName = "", curCat = "";
+      let inDistribution = false;
+      let inCostPerUnit = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+        if (!line.trim()) continue;
+
+        const ccMatch = line.match(/CC\s*=\s*(\d+)\s*,\s*([^O\n]+)/i);
+        if (ccMatch) {
+          curCC = sanitizeText(ccMatch[1]);
+          curCCName = sanitizeText(ccMatch[2]);
+          curCat = "";
+          inDistribution = false;
+          inCostPerUnit = false;
+          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          if (!distMap.has(curCC)) distMap.set(curCC, []);
+          continue;
+        }
+
+        if (line.includes("DISTRIBUTION (") || line.includes("DISTRIBUTION")) {
+          inDistribution = true;
+          inCostPerUnit = false;
+          continue;
+        }
+
+        if (line.includes("COST per unit (") || line.includes("COST       Var")) {
+          inCostPerUnit = true;
+          inDistribution = false;
+          continue;
+        }
+
+        if (inCostPerUnit) {
+          if (line.includes("Summary")) {
+            const sRow = [
+              "Summary",
+              cleanNumber(line.slice(10, 18)),
+              cleanNumber(line.slice(18, 24)),
+              cleanNumber(line.slice(24, 38)),
+              cleanNumber(line.slice(38, 44)),
+              cleanNumber(line.slice(44, 56)),
+              cleanNumber(line.slice(56, 62)),
+              cleanNumber(line.slice(62, 72)),
+              cleanNumber(line.slice(72, 85))
+            ];
+            if (curCC) costPerUnitMap.set(curCC, sRow);
+            inCostPerUnit = false;
+            continue;
+          } else if (line.includes("DISTRIBUTION") || line.includes("CC=") || line.includes("SAIL/RSP")) {
+            inCostPerUnit = false;
+          } else {
+            continue;
+          }
+        }
+
+        if (inDistribution) {
+          if (line.includes("CC=") || line.includes("SAIL/RSP") || line.includes("CUMULATIVE COST")) {
+            inDistribution = false;
+          } else if (line.includes("T O T A L") && /[\d]/.test(line)) {
+            const dQty    = sanitizeText(line.slice(41, 52));
+            const dVc     = sanitizeText(line.slice(52, 60));
+            const dFc     = sanitizeText(line.slice(60, 68));
+            const dCbdi   = sanitizeText(line.slice(68, 76));
+            const dIwc    = sanitizeText(line.slice(76, 84));
+            const dDep    = sanitizeText(line.slice(84, 92));
+            const dInt    = sanitizeText(line.slice(92, 105));
+            const totalRow = ["TOTAL", "", "", cleanNumber(dQty), cleanNumber(dVc), cleanNumber(dFc), cleanNumber(dCbdi), cleanNumber(dIwc), cleanNumber(dDep), cleanNumber(dInt)];
+            if (curCC && distMap.has(curCC)) distMap.get(curCC).push(totalRow);
+            inDistribution = false;
+            continue;
+          } else if (anyMatch(line, ["To CC", "(V+F)", "-----", "====="])) {
+            continue;
+          } else {
+            // Distribution line format: To CC (0..16), Expense (16..35), Rate (35..41), Qty (41..52), Var (52..60), Fix (60..68), CBDI (68..76), IWC (76..84), Depn (84..92), Int (92..105)
+            const toCC    = sanitizeText(line.slice(0, 16));
+            const expName = sanitizeText(line.slice(16, 35));
+            const rVf     = sanitizeText(line.slice(35, 41));
+            const dQty    = sanitizeText(line.slice(41, 52));
+            const dVc     = sanitizeText(line.slice(52, 60));
+            const dFc     = sanitizeText(line.slice(60, 68));
+            const dCbdi   = sanitizeText(line.slice(68, 76));
+            const dIwc    = sanitizeText(line.slice(76, 84));
+            const dDep    = sanitizeText(line.slice(84, 92));
+            const dInt    = sanitizeText(line.slice(92, 105));
+
+            if (toCC || dQty || dVc) {
+              if (curCC && distMap.has(curCC)) {
+                distMap.get(curCC).push([toCC, expName, cleanNumber(rVf), cleanNumber(dQty), cleanNumber(dVc), cleanNumber(dFc), cleanNumber(dCbdi), cleanNumber(dIwc), cleanNumber(dDep), cleanNumber(dInt)]);
+              }
+            }
+            continue;
+          }
+        }
+
+        if (anyMatch(line, [
+          "+---", "| C o s t", "| E l e m e n t", "SAIL/RSP", "CUMULATIVE COST SHEET",
+          "|    C o s t", "|                |", "Page "
+        ]) || line.startsWith("|")) {
+          continue;
+        }
+
+        const lineClean = line.trim();
+        if (!/[A-Za-z0-9]/.test(lineClean)) continue;
+
+        // Check if Category line
+        const restRaw = line.slice(44);
+        if (!/[\d]/.test(restRaw)) {
+          const t = lineClean;
+          if (t && !t.startsWith("Sub-") && !t.startsWith("TOTAL") && !t.startsWith("CBDI") && !t.startsWith("WORKS") && !t.includes("Page")) {
+            curCat = t;
+            continue;
+          }
+        }
+
+        let elem = sanitizeText(line.slice(0, 17));
+        let unit = sanitizeText(line.slice(17, 25));
+        let rate = sanitizeText(line.slice(25, 36));
+        let qty  = sanitizeText(line.slice(36, 44));
+
+        // If no rate or quantity in positions 25..44, allow description to expand up to col 44
+        if (!/[\d]/.test(line.slice(25, 44)) && line.length > 17) {
+          if (elem.startsWith("Sub-") || elem.startsWith("CBDI") || elem.startsWith("TOTAL") || elem.startsWith("WORKS") || elem.startsWith("IntCC-Total") || elem.startsWith("Depreciation-Tota") || elem.startsWith("Net Operating")) {
+            elem = sanitizeText(line.slice(0, 44));
+            unit = "";
+            rate = "";
+            qty = "";
+          }
+        }
+
+        const vc   = sanitizeText(line.slice(44, 52));
+        const fc   = sanitizeText(line.slice(52, 60));
+        const ccst = sanitizeText(line.slice(60, 69));
+        const iwc  = sanitizeText(line.slice(69, 77));
+        const dep  = sanitizeText(line.slice(77, 84));
+        const vr   = sanitizeText(line.slice(84, 93));
+        const fr   = sanitizeText(line.slice(93, 101));
+        const cr   = sanitizeText(line.slice(101, 109));
+        const ir   = sanitizeText(line.slice(109, 117));
+        const dr   = sanitizeText(line.slice(117, 123));
+        const usg  = sanitizeText(line.slice(123, 131));
+
+        if (elem || vc || fc || ccst) {
+          const rowData = [
+            curCC, curCCName,
+            elem, unit,
+            cleanNumber(rate), cleanNumber(qty),
+            cleanNumber(vc), cleanNumber(fc), cleanNumber(ccst), cleanNumber(iwc), cleanNumber(dep),
+            cleanNumber(vr), cleanNumber(fr), cleanNumber(cr), cleanNumber(ir), cleanNumber(dr),
+            cleanNumber(usg)
+          ];
+          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          ccMap.get(curCC).push(rowData);
+        }
+      }
+
+      const sheets = [];
+      const cumDataHeaders = [
+        "Cost Element", "Unit", "Rate (cbdi)", "Input Qty",
+        "Var Cost ('000)", "Fix Cost ('000)", "CBDI Cost ('000)", "IWC ('000)", "Depn ('000)",
+        "Var Rate", "Fix Rate", "CBDI Rate", "IWC Rate", "Depn Rate", "Usage * 1000"
+      ];
+
+      const cumCostPerUnitHeaders = [
+        "COST", "Var", "Fix", "CBDI-Cost", "IWC", "Works-Cost", "Depn", "Interest", "Total-Cost"
+      ];
+
+      // One sheet per CC with 2-row info header, cost elements, COST per unit summary, and DISTRIBUTION
+      for (const [cc, rows] of ccMap.entries()) {
+        // strip the first 2 cols (CC Code, CC Name) from each row since they're in the header now
+        const dataRows = rows.map(r => r.slice(2));
+        const ccName = rows.length > 0 ? rows[0][1] : "";
+        const infoRows = [
+          [`CC Code: ${cc}`, `CC Name: ${ccName}`],
+          []
+        ];
+        const allRows = [...infoRows, cumDataHeaders, ...dataRows];
+
+        // Append COST per unit table if present for this CC
+        const cpuRow = costPerUnitMap.get(cc);
+        if (cpuRow) {
+          allRows.push([]);
+          allRows.push(["COST per unit ( Rs )"]);
+          allRows.push(cumCostPerUnitHeaders);
+          allRows.push(cpuRow);
+        }
+
+        // Append DISTRIBUTION table if present for this CC
+        const ccDists = distMap.get(cc);
+        if (ccDists && ccDists.length > 0) {
+          allRows.push([]);
+          allRows.push(["DISTRIBUTION ( All Costs in '000 Rs )"]);
+          allRows.push(distHeaders);
+          ccDists.forEach(dr => allRows.push(dr));
+        }
+
+        sheets.push({ name: `CC_${cc}`.substring(0, 31), headers: [], rows: allRows, infoRowCount: 2 });
+      }
+
+      // Distributions sheet (combined across all CCs)
+      const allDistRows = [];
+      for (const [cc, dRows] of distMap.entries()) {
+        dRows.forEach(r => allDistRows.push([cc, ...r]));
+      }
+      if (allDistRows.length > 0) {
+        sheets.push({ name: "Distributions", headers: ["From CC", ...distHeaders], rows: allDistRows, infoRowCount: 0 });
+      }
+
+      return { sheets: sheets.length > 0 ? sheets : [{ name: "Cumulative_Cost", headers: cumDataHeaders, rows: [], infoRowCount: 0 }] };
+    }
+
+    // 5. COST VARIANCE REPORT (EXACT CHARACTER-ALIGNED MATRIX PARSER)
+    function parseNewVarFixed(text) {
+      const lines = text.split(/\r?\n/);
+      const varDataHeaders = [
+        "Element Name",
+        "P1 V-Rate", "P1 Usage", "P1 V-Cost", "P1 F-Cost",
+        "P2 V-Rate", "P2 Usage", "P2 V-Cost", "P2 F-Cost",
+        "Var V-Rate", "Var Usage", "Var V-Cost", "Var F-Cost"
+      ];
+
+      const ccMap = new Map();
+      let curCC = "", curCCName = "", curPeriod = "";
+
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+        if (!line.trim()) continue;
+
+        if (line.includes("PERIOD:") || line.includes("PERIOD :")) {
+          const pm = line.match(/PERIOD\s*:\s*([^\sP]+)/i);
+          if (pm) curPeriod = sanitizeText(pm[1]);
+        }
+
+        const ccMatch = line.match(/CC\s*CODE\s*:\s*(\d+)\s*(.*)/i);
+        if (ccMatch) {
+          curCC = sanitizeText(ccMatch[1]);
+          curCCName = sanitizeText(ccMatch[2]).replace(/page.*/i, "").trim();
+          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          continue;
+        }
+
+        if (anyMatch(line, ["COST VARIANCE REPORT", "Element", "Rs/Unit", "--------------------"])) continue;
+
+        if (line.includes("||")) {
+          const parts = line.split("||");
+          if (parts.length >= 4) {
+            const rawName = sanitizeText(parts[0].trim().replace(/^[\=\@\*\+]+/, "").trim());
+            const p1 = parts[1].padEnd(32);
+            const p2 = parts[2].padEnd(32);
+            const p3 = parts[3].padEnd(38);
+            const p1Vals = [p1.slice(0, 8), p1.slice(8, 17), p1.slice(17, 24), p1.slice(24, 32)].map(s => cleanNumber(s));
+            const p2Vals = [p2.slice(0, 8), p2.slice(8, 17), p2.slice(17, 24), p2.slice(24, 32)].map(s => cleanNumber(s));
+            const varVals = [p3.slice(0, 10), p3.slice(10, 20), p3.slice(20, 29), p3.slice(29, 38)].map(s => cleanNumber(s));
+            if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+            ccMap.get(curCC).push([rawName, ...p1Vals, ...p2Vals, ...varVals]);
+          }
+        }
+      }
+
+      const sheets = [];
+      for (const [cc, rows] of ccMap.entries()) {
+        const infoRows = [
+          [`CC Code: ${cc}`, `CC Name: ${curCCName}`, `Period: ${curPeriod}`],
+          []
+        ];
+        const allRows = [...infoRows, varDataHeaders, ...rows];
+        sheets.push({ name: `CC_${cc}`.substring(0, 31), headers: [], rows: allRows, infoRowCount: 2 });
+      }
+      return { sheets: sheets.length > 0 ? sheets : [{ name: "Cost_Variance", headers: varDataHeaders, rows: [], infoRowCount: 0 }] };
+    }
+
+    // 6. GENERIC FALLBACK
+    function parseGenericFixed(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      const rows = [];
+      let maxCols = 0;
+
+      for (const line of lines) {
+        if (/^[\-\=\+\#\*\_\~\|\s]{5,}$/.test(line)) continue;
+        let tokens = line.trim().split(/\t|\s{2,}|\|/).map(t => cleanNumber(t.trim())).filter(t => t !== "");
+        if (tokens.length > 0) {
+          if (tokens.length > maxCols) maxCols = tokens.length;
+          rows.push(tokens);
+        }
+      }
+
+      const headers = [];
+      for (let c = 1; c <= maxCols; c++) headers.push(`Column ${c}`);
+      rows.forEach(r => { while (r.length < maxCols) r.push(""); });
+
+      return { sheets: [{ name: "Data_Table", headers: headers, rows: rows }] };
+    }
+
+    // UI RENDERING
+    function renderSheetTabs() {
+      sheetTabsList.innerHTML = "";
+      workbookData.sheets.forEach((sheet, idx) => {
+        const btn = document.createElement("button");
+        btn.className = `px-3 py-1.5 rounded-t-lg text-xs font-medium transition flex items-center gap-1.5 whitespace-nowrap ${
+          idx === activeSheetIndex 
+            ? "bg-slate-900 text-emerald-400 border-t-2 border-emerald-400 font-semibold" 
+            : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+        }`;
+        btn.innerHTML = `<i class="ph ph-file-text"></i> ${sheet.name} <span class="text-[10px] opacity-70">(${sheet.rows.length})</span>`;
+        btn.addEventListener("click", () => switchSheet(idx));
+        sheetTabsList.appendChild(btn);
+      });
+    }
+
+    function switchSheet(index) {
+      activeSheetIndex = index;
+      renderSheetTabs();
+
+      const currentSheet = workbookData.sheets[index];
+      if (!currentSheet) return;
+
+      previewThead.innerHTML = `<tr>${currentSheet.headers.map(h => `<th class="p-2.5 border-b border-slate-700 font-semibold text-slate-200 whitespace-nowrap">${escapeHtml(h)}</th>`).join("")}</tr>`;
+
+      const previewRows = currentSheet.rows.slice(0, 100);
+      previewTbody.innerHTML = previewRows.map(row => {
+        return `<tr class="hover:bg-slate-800/60 transition">${row.map(cell => {
+          const isNum = typeof cell === "number";
+          const formatted = isNum ? cell.toLocaleString() : (cell !== undefined && cell !== null ? String(cell) : "");
+          return `<td class="p-2 border-b border-slate-800/60 whitespace-nowrap ${isNum ? 'text-right text-emerald-300' : 'text-slate-300'}">${escapeHtml(formatted)}</td>`;
+        }).join("")}</tr>`;
+      }).join("");
+
+      sheetMetaText.textContent = `Showing Sheet "${currentSheet.name}" (${currentSheet.rows.length.toLocaleString()} total rows${currentSheet.rows.length > 100 ? ', first 100 shown in preview' : ''})`;
+    }
+
+    function escapeHtml(str) {
+      if (typeof str !== "string") return str;
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function exportToExcel() {
+      if (!workbookData || !workbookData.sheets || workbookData.sheets.length === 0) {
+        alert("No parsed data to export.");
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+
+      const numFmt  = "#,##0.00";
+      const numFmt0 = "#,##0";
+
+      const CLR = {
+        infoBg     : "FF2E4057",   // dark slate — info header row
+        infoFg     : "FFFFFFFF",
+        headerBg   : "FF1F4E79",   // deep navy — column header row
+        headerFg   : "FFFFFFFF",
+        subtotalBg : "FFFFF2CC",
+        subtotalFg : "FF7F6000",
+        totalBg    : "FFFFEB9C",
+        totalFg    : "FF7F6000",
+        distBg     : "FFEDEDED",
+        altRow     : "FFF2F7FC",
+        whiteBg    : "FFFFFFFF",
+        border     : "FFB8CCE4",
+      };
+
+      function bdr(c) { return { style: "thin", color: { argb: c } }; }
+      function allBorders(c) { const b = bdr(c); return { top: b, bottom: b, left: b, right: b }; }
+
+      function makeStyle(bg, fg, bold, hAlign, nfmt, sz) {
+        return {
+          font     : { name: "Calibri", sz: sz || 10, bold: !!bold, color: { argb: fg || "FF000000" } },
+          fill     : { fgColor: { argb: bg || CLR.whiteBg }, patternType: "solid" },
+          alignment: { horizontal: hAlign || "left", vertical: "center", wrapText: false },
+          border   : allBorders(CLR.border),
+          numFmt   : nfmt || ""
+        };
+      }
+
+      function rowType(row) {
+        const t = String(row[0] || "").toUpperCase().trim();
+        if (/^(COST\/UNIT|COST PER UNIT|DISTRIBUTION)/.test(t)) return "section_title";
+        if (t === "COST" || t === "TO DEPARTMENT" || t === "TO CC") return "sub_header";
+        if (/^(TOTAL COST|GRAND TOTAL|TOTAL\s|TOTAL$)/.test(t) || t.startsWith("TOTAL ")) return "grand";
+        if (/^(SUB-TOTAL|SUBTOTAL|SUB TOTAL|CBDI =|WORKS COST|NET OPERATING|DEPRECIATION-TOTAL|INTCC-TOTAL|SUMMARY$)/.test(t)) return "subtotal";
+        if (/SUBTOTAL/.test(t)) return "subtotal";
+        return "data";
+      }
+
+      const enc = (r, c) => XLSX.utils.encode_cell({ r, c });
+
+      workbookData.sheets.forEach(sheetDef => {
+        const irc        = sheetDef.infoRowCount || 0;   // how many info rows at top
+        const hasHeaders = sheetDef.headers && sheetDef.headers.length > 0;
+        const allRows    = sheetDef.rows || [];           // for per-CC sheets, rows includes info+header+data
+
+        // For per-CC sheets: rows = [infoRow, blankRow, headerRow, ...dataRows]
+        // For plain sheets: sheetDef.headers is the header, rows are data rows
+        let aoa;
+        if (hasHeaders) {
+          aoa = [sheetDef.headers, ...allRows];
+        } else {
+          aoa = allRows; // info rows, header row, data rows all in allRows
+        }
+
+        if (aoa.length === 0) return;
+
+        // Max column count across all rows
+        let C = 0;
+        aoa.forEach(r => { if (r && r.length > C) C = r.length; });
+
+        const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: false });
+        const R  = aoa.length;
+
+        // Column widths
+        const colWidths = new Array(C).fill(8);
+        aoa.forEach(row => {
+          if (!row) return;
+          row.forEach((cell, ci) => {
+            const len = cell != null ? String(cell).length : 0;
+            colWidths[ci] = Math.max(colWidths[ci], len + 2);
+          });
+        });
+        ws["!cols"] = colWidths.map(w => ({ wch: Math.min(w, 45) }));
+
+        // Figure out which row index is the column header row
+        // For per-CC: row irc+1 (0-indexed: irc+1 because row 0 is info, row 1 is blank, row irc is the col header)
+        // Actually: infoRowCount=2 means rows 0,1 are info; row 2 is column headers
+        // For plain sheets (hasHeaders): row 0 is header
+        const headerRowIdx = hasHeaders ? 0 : (irc > 0 ? irc : 0);
+        const dataStartIdx = headerRowIdx + 1;
+
+        // Freeze: freeze below header row
+        const freezeRow = headerRowIdx + 1;
+        ws["!freeze"] = { xSplit: 0, ySplit: freezeRow, topLeftCell: `A${freezeRow + 1}`, activePane: "bottomRight" };
+
+        // Detect numeric columns from header row
+        const numericCols = new Set();
+        const headerRow = aoa[headerRowIdx] || [];
+        headerRow.forEach((h, ci) => {
+          if (/cost|rate|qty|amount|var|fix|depn|iwc|int|rs\.|prod|total|usage|quantity|unit/i.test(String(h || ""))) {
+            numericCols.add(ci);
+          }
+        });
+        // Also detect from first actual data row
+        const firstDataRow = aoa[dataStartIdx] || [];
+        firstDataRow.forEach((v, ci) => { if (typeof v === "number") numericCols.add(ci); });
+
+        // Style every row
+        for (let r = 0; r < R; r++) {
+          const row = aoa[r] || [];
+          let isInfoRow    = !hasHeaders && r < irc;
+          let isHeaderRow  = r === headerRowIdx;
+          let isDataRow    = r >= dataStartIdx;
+          let isBlankRow   = (!hasHeaders && r === (irc > 0 ? irc - 1 : -1) && row.length === 0) || (row.length === 0 || (row.length === 1 && !row[0]));
+
+          for (let c = 0; c < C; c++) {
+            const ref = enc(r, c);
+            const val = row[c];
+
+            // Ensure cell exists
+            if (!ws[ref]) {
+              ws[ref] = val == null
+                ? { t: "z" }
+                : typeof val === "number"
+                  ? { t: "n", v: val }
+                  : { t: "s", v: String(val) };
+            }
+
+            let s;
+            if (isInfoRow) {
+              s = makeStyle(CLR.infoBg, CLR.infoFg, true, "left", "", 11);
+            } else if (isBlankRow) {
+              s = makeStyle(CLR.whiteBg, "FF000000", false, "left", "", 10);
+            } else if (isHeaderRow) {
+              s = makeStyle(CLR.headerBg, CLR.headerFg, true, "center", "", 10);
+            } else if (isDataRow) {
+              const rtype  = rowType(row);
+              const isEven = (r - dataStartIdx) % 2 === 0;
+              const isNum  = numericCols.has(c) || typeof val === "number";
+              const hAlign = isNum ? "right" : "left";
+              const nfmt   = (isNum && typeof val === "number")
+                ? (Number.isInteger(val) && Math.abs(val) < 10000 ? numFmt0 : numFmt)
+                : "";
+              let bg, fg, bold;
+              if (rtype === "section_title")  { bg = CLR.headerBg;   fg = CLR.headerFg;   bold = true; }
+              else if (rtype === "sub_header") { bg = CLR.infoBg;     fg = CLR.infoFg;     bold = true; }
+              else if (rtype === "grand")     { bg = CLR.totalBg;    fg = CLR.totalFg;    bold = true; }
+              else if (rtype === "subtotal")  { bg = CLR.subtotalBg; fg = CLR.subtotalFg; bold = true; }
+              else                            { bg = isEven ? CLR.altRow : CLR.whiteBg; fg = "FF000000"; bold = false; }
+              s = makeStyle(bg, fg, bold, rtype === "sub_header" ? "center" : hAlign, nfmt, 10);
+            } else {
+              s = makeStyle(CLR.whiteBg, "FF000000", false, "left", "", 10);
+            }
+            ws[ref].s = s;
+          }
+        }
+
+        // Auto-filter on header row
+        ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: headerRowIdx, c: 0 }, e: { r: R - 1, c: C - 1 } }) };
+        ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: R - 1, c: C - 1 } });
+
+        let safeName = sheetDef.name.replace(/[\\\/\?\*\[\]\:]/g, "_").substring(0, 31);
+        if (!safeName) safeName = "Sheet1";
+        XLSX.utils.book_append_sheet(wb, ws, safeName);
+      });
+
+      const outFileName = `${currentFileName}_converted.xlsx`;
+      XLSX.writeFile(wb, outFileName, { bookSST: false, cellStyles: true });
+    }
+  </script>
 </body>
 </html>

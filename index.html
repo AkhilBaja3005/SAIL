@@ -882,9 +882,9 @@
         let unit = sanitizeText(line.slice(31, 44));
         // Expand description to col 44 when:
         //   (a) unit is empty, OR
-        //   (b) unit has no uppercase letters and no digits — meaning it's a continuation of
+        //   (b) unit has no uppercase letters, digits, or % symbol — meaning it's a continuation of
         //       the description (e.g. the "t" in "Works Cost+Depn+Int"), not a real unit code
-        if (line.length > 31 && !/[\d]/.test(line.slice(31, 44)) && (!unit || !/[A-Z0-9]/.test(unit))) {
+        if (line.length > 31 && !/[\d]/.test(line.slice(31, 44)) && (!unit || !/[A-Z0-9%]/.test(unit))) {
           elem = sanitizeText(line.slice(0, 44));
           unit = "";
         }

@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS (xlsx.full.min.js) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- JSZip for multi-file batch zip export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <style>
@@ -111,20 +113,20 @@
         <div>
           <div class="flex items-center justify-between mb-3">
             <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <i class="ph ph-upload-simple"></i> Step 2: Upload .txt File
+              <i class="ph ph-upload-simple"></i> Step 2: Upload .txt File(s)
             </span>
             <span id="fileSizeBadge" class="text-xs text-slate-400"></span>
           </div>
 
           <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/80 bg-slate-950/50 hover:bg-slate-950/90 transition-all rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[165px] group">
-            <input type="file" id="fileInput" accept=".txt,.prn,.dat,.log" class="hidden" />
+            <input type="file" id="fileInput" accept=".txt,.prn,.dat,.log" multiple class="hidden" />
             <div class="w-12 h-12 rounded-full bg-slate-800 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 text-slate-400 flex items-center justify-center mb-2.5 transition transform group-hover:scale-105">
-              <i class="ph ph-cloud-arrow-up text-2xl"></i>
+              <i class="ph ph-files text-2xl"></i>
             </div>
             <p class="text-sm font-medium text-slate-200 group-hover:text-white">
-              Drag &amp; drop your <code class="text-emerald-400 font-bold">.txt</code> cost report here
+              Drag &amp; drop one or more <code class="text-emerald-400 font-bold">.txt</code> cost reports
             </p>
-            <p class="text-xs text-slate-400 mt-1">or click to select from your computer</p>
+            <p class="text-xs text-slate-400 mt-1">or click to browse multiple files from your computer</p>
             <div class="flex flex-wrap items-center justify-center gap-2 mt-3 text-[11px] text-slate-500">
               <span class="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">ele_display cons</span>
               <span class="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">cs_rep_display</span>
@@ -134,26 +136,32 @@
           </div>
         </div>
 
-        <!-- File Active Bar -->
-        <div id="fileInfoBar" class="hidden mt-4 p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl flex items-center justify-between">
-          <div class="flex items-center gap-3 overflow-hidden">
-            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
-              <i class="ph ph-file-text text-lg"></i>
+        <!-- File Active Bar / Switcher -->
+        <div id="fileInfoBar" class="hidden mt-4 p-3 bg-slate-950/90 border border-emerald-800/60 rounded-xl flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <i class="ph ph-folder"></i> Uploaded Files (<span id="fileCountBadge">1</span>)
+              </span>
             </div>
-            <div class="truncate">
-              <div id="fileNameText" class="text-xs font-semibold text-emerald-200 truncate">report.txt</div>
-              <div id="fileStatsText" class="text-[11px] text-slate-400">0 KB • 0 lines</div>
-            </div>
+            <button id="clearFileBtn" title="Clear all files" class="text-slate-400 hover:text-rose-400 px-2 py-1 rounded-lg hover:bg-slate-800 transition text-xs flex items-center gap-1">
+              <i class="ph ph-trash"></i> <span>Clear All</span>
+            </button>
           </div>
-          <button id="clearFileBtn" title="Remove file" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition text-sm">
-            <i class="ph ph-trash"></i>
-          </button>
+          <!-- File selection tabs / pills -->
+          <div id="fileChipsContainer" class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+            <!-- Dynamic file chips -->
+          </div>
+          <div id="currentFileStats" class="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
+            <span id="fileNameText" class="font-medium text-slate-300 truncate max-w-[280px]">report.txt</span>
+            <span id="fileStatsText">0 KB • 0 lines</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Action & Status Bar -->
-    <div id="actionBar" class="hidden flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-xl">
+    <div id="actionBar" class="hidden flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-xl">
       <div class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
           <span class="text-xs text-slate-400">Format:</span>
@@ -167,12 +175,15 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
         <button id="previewRawBtn" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 transition">
           <i class="ph ph-code"></i> View Raw TXT
         </button>
-        <button id="downloadXlsxBtn" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition transform active:scale-95">
-          <i class="ph ph-download-simple text-lg font-bold"></i> Download .XLSX Excel
+        <button id="downloadXlsxBtn" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition transform active:scale-95">
+          <i class="ph ph-download-simple text-base sm:text-lg font-bold"></i> <span id="downloadCurrentBtnText">Download .XLSX</span>
+        </button>
+        <button id="downloadZipBtn" class="hidden px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 items-center gap-2 transition transform active:scale-95">
+          <i class="ph ph-archive text-base sm:text-lg font-bold"></i> <span id="downloadZipBtnText">Download All (ZIP)</span>
         </button>
       </div>
     </div>
@@ -238,11 +249,13 @@
 
   <!-- Application Logic -->
   <script>
-    let rawFileContent = "";
-    let currentFileName = "Cost_Report";
-    let detectedType = "generic";
-    let workbookData = { sheets: [] };
-    let activeSheetIndex = 0;
+    let uploadedFiles = []; // Array of { id, file, name, rawContent, lineCount, sizeKB, detectedType, workbookData }
+    let activeFileIndex = 0;
+
+    // Helper references to active file state
+    function getActiveFile() {
+      return uploadedFiles[activeFileIndex] || null;
+    }
 
     const PRESET_INFO = {
       auto: {
@@ -286,6 +299,8 @@
     const typeDescription = document.getElementById("typeDescription");
     const detectedBadge = document.getElementById("detectedBadge");
     const fileInfoBar = document.getElementById("fileInfoBar");
+    const fileCountBadge = document.getElementById("fileCountBadge");
+    const fileChipsContainer = document.getElementById("fileChipsContainer");
     const fileNameText = document.getElementById("fileNameText");
     const fileStatsText = document.getElementById("fileStatsText");
     const clearFileBtn = document.getElementById("clearFileBtn");
@@ -298,6 +313,8 @@
     const previewTbody = document.getElementById("previewTbody");
     const sheetMetaText = document.getElementById("sheetMetaText");
     const downloadXlsxBtn = document.getElementById("downloadXlsxBtn");
+    const downloadCurrentBtnText = document.getElementById("downloadCurrentBtnText");
+    const downloadZipBtn = document.getElementById("downloadZipBtn");
     const previewRawBtn = document.getElementById("previewRawBtn");
     const rawTextModal = document.getElementById("rawTextModal");
     const rawTextContent = document.getElementById("rawTextContent");
@@ -305,7 +322,13 @@
 
     reportTypeSelect.addEventListener("change", (e) => {
       updatePresetDescription(e.target.value);
-      if (rawFileContent) processContent();
+      if (uploadedFiles.length > 0) {
+        // Re-process all uploaded files with the selected preset (or auto)
+        uploadedFiles.forEach(f => {
+          f.workbookData = parseReportForFile(f);
+        });
+        updateUIForActiveFile();
+      }
     });
 
     dropZone.addEventListener("click", () => fileInput.click());
@@ -319,26 +342,30 @@
     dropZone.addEventListener("drop", (e) => {
       e.preventDefault();
       dropZone.classList.remove("border-emerald-500", "bg-slate-950/90");
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleFileUpload(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFiles(Array.from(e.dataTransfer.files));
       }
     });
     fileInput.addEventListener("change", (e) => {
-      if (e.target.files && e.target.files[0]) {
-        handleFileUpload(e.target.files[0]);
+      if (e.target.files && e.target.files.length > 0) {
+        handleFiles(Array.from(e.target.files));
       }
     });
 
     clearFileBtn.addEventListener("click", resetFileState);
     previewRawBtn.addEventListener("click", () => {
-      rawTextContent.textContent = rawFileContent;
-      rawTextModal.classList.remove("hidden");
+      const active = getActiveFile();
+      if (active) {
+        rawTextContent.textContent = active.rawContent;
+        rawTextModal.classList.remove("hidden");
+      }
     });
     closeRawModal.addEventListener("click", () => rawTextModal.classList.add("hidden"));
     rawTextModal.addEventListener("click", (e) => {
       if (e.target === rawTextModal) rawTextModal.classList.add("hidden");
     });
-    downloadXlsxBtn.addEventListener("click", exportToExcel);
+    downloadXlsxBtn.addEventListener("click", exportCurrentToExcel);
+    downloadZipBtn.addEventListener("click", exportAllToZip);
 
     function updatePresetDescription(typeKey) {
       const info = PRESET_INFO[typeKey] || PRESET_INFO.generic;
@@ -349,29 +376,170 @@
     }
 
     function resetFileState() {
-      rawFileContent = "";
+      uploadedFiles = [];
+      activeFileIndex = 0;
       fileInput.value = "";
       fileInfoBar.classList.add("hidden");
       actionBar.classList.add("hidden");
       previewContainer.classList.add("hidden");
       detectedBadge.classList.add("hidden");
-      workbookData = { sheets: [] };
+      downloadZipBtn.classList.add("hidden");
+      downloadZipBtn.classList.remove("flex");
     }
 
-    function handleFileUpload(file) {
-      currentFileName = file.name.replace(/\.[^/.]+$/, "");
-      fileNameText.textContent = file.name;
-      const sizeKB = (file.size / 1024).toFixed(1);
+    async function handleFiles(files) {
+      const validFiles = files.filter(f => f.size > 0);
+      if (validFiles.length === 0) return;
 
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        rawFileContent = evt.target.result;
-        const lineCount = rawFileContent.split(/\r?\n/).length;
-        fileStatsText.textContent = `${sizeKB} KB • ${lineCount.toLocaleString()} lines`;
-        fileInfoBar.classList.remove("hidden");
-        processContent();
-      };
-      reader.readAsText(file, "ISO-8859-1");
+      const readPromises = validFiles.map(file => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            const rawContent = evt.target.result;
+            const lineCount = rawContent.split(/\r?\n/).length;
+            const sizeKB = (file.size / 1024).toFixed(1);
+            const detected = detectReportType(rawContent);
+            const fileItem = {
+              id: "file_" + Math.random().toString(36).substring(2, 9),
+              file: file,
+              name: file.name,
+              baseName: file.name.replace(/\.[^/.]+$/, ""),
+              sizeKB: sizeKB,
+              lineCount: lineCount,
+              rawContent: rawContent,
+              detectedType: detected,
+              workbookData: null
+            };
+            fileItem.workbookData = parseReportForFile(fileItem);
+            resolve(fileItem);
+          };
+          reader.readAsText(file, "ISO-8859-1");
+        });
+      });
+
+      const parsedFiles = await Promise.all(readPromises);
+      // Append to uploadedFiles or replace if fresh
+      uploadedFiles = uploadedFiles.concat(parsedFiles);
+      activeFileIndex = uploadedFiles.length - parsedFiles.length; // Focus on first newly added file
+      if (activeFileIndex < 0) activeFileIndex = 0;
+
+      renderFileChips();
+      updateUIForActiveFile();
+    }
+
+    function renderFileChips() {
+      fileChipsContainer.innerHTML = "";
+      fileCountBadge.textContent = uploadedFiles.length;
+
+      uploadedFiles.forEach((fileItem, idx) => {
+        const chip = document.createElement("div");
+        const isActive = idx === activeFileIndex;
+        chip.className = `cursor-pointer px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 flex-shrink-0 transition border ${
+          isActive 
+            ? "bg-emerald-950/80 border-emerald-500 text-emerald-300 font-semibold shadow-sm" 
+            : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:border-slate-600"
+        }`;
+        
+        chip.innerHTML = `
+          <i class="ph ${isActive ? 'ph-file-xls text-emerald-400 font-bold' : 'ph-file-text'}"></i>
+          <span class="truncate max-w-[150px] sm:max-w-[200px]" title="${escapeHtml(fileItem.name)}">${escapeHtml(fileItem.name)}</span>
+          <button class="remove-chip-btn text-slate-500 hover:text-rose-400 ml-1 p-0.5 rounded hover:bg-slate-800 transition" title="Remove file">
+            <i class="ph ph-x"></i>
+          </button>
+        `;
+
+        chip.addEventListener("click", (e) => {
+          if (e.target.closest(".remove-chip-btn")) {
+            e.stopPropagation();
+            removeFile(idx);
+            return;
+          }
+          switchActiveFile(idx);
+        });
+
+        fileChipsContainer.appendChild(chip);
+      });
+
+      // Show/hide zip button depending on file count
+      if (uploadedFiles.length > 1) {
+        downloadZipBtn.classList.remove("hidden");
+        downloadZipBtn.classList.add("flex");
+        downloadZipBtn.querySelector("#downloadZipBtnText").textContent = `Download All ${uploadedFiles.length} (.ZIP)`;
+      } else {
+        downloadZipBtn.classList.add("hidden");
+        downloadZipBtn.classList.remove("flex");
+      }
+    }
+
+    function removeFile(index) {
+      uploadedFiles.splice(index, 1);
+      if (uploadedFiles.length === 0) {
+        resetFileState();
+        return;
+      }
+      if (activeFileIndex >= uploadedFiles.length) {
+        activeFileIndex = uploadedFiles.length - 1;
+      }
+      renderFileChips();
+      updateUIForActiveFile();
+    }
+
+    function switchActiveFile(index) {
+      if (index < 0 || index >= uploadedFiles.length) return;
+      activeFileIndex = index;
+      renderFileChips();
+      updateUIForActiveFile();
+    }
+
+    function parseReportForFile(fileItem) {
+      const selectedType = reportTypeSelect.value;
+      const activeType = selectedType === "auto" ? fileItem.detectedType : selectedType;
+      return parseReport(fileItem.rawContent, activeType);
+    }
+
+    function updateUIForActiveFile() {
+      const active = getActiveFile();
+      if (!active) {
+        resetFileState();
+        return;
+      }
+
+      fileInfoBar.classList.remove("hidden");
+      actionBar.classList.remove("hidden");
+      previewContainer.classList.remove("hidden");
+
+      fileNameText.textContent = active.name;
+      fileStatsText.textContent = `${active.sizeKB} KB • ${active.lineCount.toLocaleString()} lines`;
+
+      const selectedType = reportTypeSelect.value;
+      if (selectedType === "auto") {
+        detectedBadge.classList.remove("hidden");
+        const detectedName = PRESET_INFO[active.detectedType]?.title || active.detectedType;
+        detectedBadge.textContent = "Auto: " + detectedName;
+      } else {
+        detectedBadge.classList.add("hidden");
+      }
+
+      const activeParserType = selectedType === "auto" ? active.detectedType : selectedType;
+      activePresetBadge.textContent = PRESET_INFO[activeParserType]?.title || activeParserType;
+
+      if (!active.workbookData) {
+        active.workbookData = parseReportForFile(active);
+      }
+
+      const wb = active.workbookData;
+      let totalRows = wb.sheets.reduce((acc, s) => acc + s.rows.length, 0);
+      parsedStatsCount.textContent = `${wb.sheets.length} sheet(s), ${totalRows.toLocaleString()} rows`;
+
+      if (uploadedFiles.length > 1) {
+        downloadCurrentBtnText.textContent = `Download Current (${active.baseName.substring(0, 14)}...)`;
+      } else {
+        downloadCurrentBtnText.textContent = "Download .XLSX Excel";
+      }
+
+      activeSheetIndex = 0;
+      renderSheetTabs();
+      switchSheet(0);
     }
 
     function detectReportType(text) {
@@ -427,34 +595,6 @@
       return list.some(k => str.includes(k));
     }
 
-    function processContent() {
-      if (!rawFileContent) return;
-
-      const selectedType = reportTypeSelect.value;
-      detectedType = detectReportType(rawFileContent);
-
-      if (selectedType === "auto") {
-        detectedBadge.classList.remove("hidden");
-        const detectedName = PRESET_INFO[detectedType]?.title || detectedType;
-        detectedBadge.textContent = "Auto: " + detectedName;
-      } else {
-        detectedBadge.classList.add("hidden");
-      }
-
-      const activeParserType = selectedType === "auto" ? detectedType : selectedType;
-      activePresetBadge.textContent = PRESET_INFO[activeParserType]?.title || activeParserType;
-
-      workbookData = parseReport(rawFileContent, activeParserType);
-
-      actionBar.classList.remove("hidden");
-      previewContainer.classList.remove("hidden");
-
-      let totalRows = workbookData.sheets.reduce((acc, s) => acc + s.rows.length, 0);
-      parsedStatsCount.textContent = `${workbookData.sheets.length} sheet(s), ${totalRows.toLocaleString()} rows`;
-
-      renderSheetTabs();
-      switchSheet(0);
-    }
 
     function parseReport(text, type) {
       switch (type) {
@@ -1261,7 +1401,10 @@
     // UI RENDERING
     function renderSheetTabs() {
       sheetTabsList.innerHTML = "";
-      workbookData.sheets.forEach((sheet, idx) => {
+      const active = getActiveFile();
+      if (!active || !active.workbookData || !active.workbookData.sheets) return;
+
+      active.workbookData.sheets.forEach((sheet, idx) => {
         const btn = document.createElement("button");
         btn.className = `px-3 py-1.5 rounded-t-lg text-xs font-medium transition flex items-center gap-1.5 whitespace-nowrap ${
           idx === activeSheetIndex 
@@ -1278,7 +1421,10 @@
       activeSheetIndex = index;
       renderSheetTabs();
 
-      const currentSheet = workbookData.sheets[index];
+      const active = getActiveFile();
+      if (!active || !active.workbookData || !active.workbookData.sheets) return;
+
+      const currentSheet = active.workbookData.sheets[index];
       if (!currentSheet) return;
 
       previewThead.innerHTML = `<tr>${currentSheet.headers.map(h => `<th class="p-2.5 border-b border-slate-700 font-semibold text-slate-200 whitespace-nowrap">${escapeHtml(h)}</th>`).join("")}</tr>`;
@@ -1300,11 +1446,8 @@
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
-    function exportToExcel() {
-      if (!workbookData || !workbookData.sheets || workbookData.sheets.length === 0) {
-        alert("No parsed data to export.");
-        return;
-      }
+    function buildWorkbook(wbData) {
+      if (!wbData || !wbData.sheets || wbData.sheets.length === 0) return null;
 
       const wb = XLSX.utils.book_new();
 
@@ -1351,23 +1494,20 @@
 
       const enc = (r, c) => XLSX.utils.encode_cell({ r, c });
 
-      workbookData.sheets.forEach(sheetDef => {
+      wbData.sheets.forEach(sheetDef => {
         const irc        = sheetDef.infoRowCount || 0;   // how many info rows at top
         const hasHeaders = sheetDef.headers && sheetDef.headers.length > 0;
         const allRows    = sheetDef.rows || [];           // for per-CC sheets, rows includes info+header+data
 
-        // For per-CC sheets: rows = [infoRow, blankRow, headerRow, ...dataRows]
-        // For plain sheets: sheetDef.headers is the header, rows are data rows
         let aoa;
         if (hasHeaders) {
           aoa = [sheetDef.headers, ...allRows];
         } else {
-          aoa = allRows; // info rows, header row, data rows all in allRows
+          aoa = allRows;
         }
 
         if (aoa.length === 0) return;
 
-        // Max column count across all rows
         let C = 0;
         aoa.forEach(r => { if (r && r.length > C) C = r.length; });
 
@@ -1385,14 +1525,10 @@
         });
         ws["!cols"] = colWidths.map(w => ({ wch: Math.min(w, 45) }));
 
-        // Figure out which row index is the column header row
-        // For per-CC: row irc+1 (0-indexed: irc+1 because row 0 is info, row 1 is blank, row irc is the col header)
-        // Actually: infoRowCount=2 means rows 0,1 are info; row 2 is column headers
-        // For plain sheets (hasHeaders): row 0 is header
         const headerRowIdx = hasHeaders ? 0 : (irc > 0 ? irc : 0);
         const dataStartIdx = headerRowIdx + 1;
 
-        // Freeze: freeze below header row
+        // Freeze below header row
         const freezeRow = headerRowIdx + 1;
         ws["!freeze"] = { xSplit: 0, ySplit: freezeRow, topLeftCell: `A${freezeRow + 1}`, activePane: "bottomRight" };
 
@@ -1404,7 +1540,6 @@
             numericCols.add(ci);
           }
         });
-        // Also detect from first actual data row
         const firstDataRow = aoa[dataStartIdx] || [];
         firstDataRow.forEach((v, ci) => { if (typeof v === "number") numericCols.add(ci); });
 
@@ -1420,7 +1555,6 @@
             const ref = enc(r, c);
             const val = row[c];
 
-            // Ensure cell exists
             if (!ws[ref]) {
               ws[ref] = val == null
                 ? { t: "z" }
@@ -1467,8 +1601,73 @@
         XLSX.utils.book_append_sheet(wb, ws, safeName);
       });
 
-      const outFileName = `${currentFileName}_converted.xlsx`;
+      return wb;
+    }
+
+    function exportCurrentToExcel() {
+      const active = getActiveFile();
+      if (!active || !active.workbookData || !active.workbookData.sheets || active.workbookData.sheets.length === 0) {
+        alert("No parsed data to export.");
+        return;
+      }
+
+      const wb = buildWorkbook(active.workbookData);
+      if (!wb) {
+        alert("Failed to build workbook.");
+        return;
+      }
+
+      const outFileName = `${active.baseName}_converted.xlsx`;
       XLSX.writeFile(wb, outFileName, { bookSST: false, cellStyles: true });
+    }
+
+    async function exportAllToZip() {
+      if (typeof JSZip === "undefined") {
+        alert("JSZip library not loaded. Please ensure internet access or reload the page.");
+        return;
+      }
+
+      if (uploadedFiles.length === 0) {
+        alert("No files to export.");
+        return;
+      }
+
+      const originalBtnText = downloadZipBtn.querySelector("#downloadZipBtnText").textContent;
+      downloadZipBtn.querySelector("#downloadZipBtnText").textContent = "Creating ZIP...";
+      downloadZipBtn.disabled = true;
+
+      try {
+        const zip = new JSZip();
+
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const fileItem = uploadedFiles[i];
+          if (!fileItem.workbookData) {
+            fileItem.workbookData = parseReportForFile(fileItem);
+          }
+          const wb = buildWorkbook(fileItem.workbookData);
+          if (wb) {
+            const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: true });
+            const xlsxName = `${fileItem.baseName}_converted.xlsx`;
+            zip.file(xlsxName, wbout);
+          }
+        }
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const downloadUrl = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = `SAIL_Cost_Reports_${new Date().toISOString().slice(0, 10)}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+      } catch (err) {
+        console.error("Error creating ZIP:", err);
+        alert("Failed to generate ZIP file: " + err.message);
+      } finally {
+        downloadZipBtn.querySelector("#downloadZipBtnText").textContent = originalBtnText;
+        downloadZipBtn.disabled = false;
+      }
     }
   </script>
 </body>

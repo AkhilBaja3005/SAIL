@@ -1351,13 +1351,23 @@
           continue;
         }
 
-        // Detect period headers like < Monthly 06-2026 > || < Monthly 07-2026 > || <----- Cost Variance ----->
+        // Detect period headers like: < Monthly 06-2026 > || < Monthly 07-2026 > || <----- Cost Variance ----->
+        // Note: Part 0 before the first "||" has element padding then "< Monthly 06-2026 >"
         if (line.includes("<") && line.includes(">") && line.includes("||")) {
           const pParts = line.split("||");
           if (pParts.length >= 3) {
-            p1Header = sanitizeText(pParts[0].replace(/[<\>\-]/g, "").trim());
-            p2Header = sanitizeText(pParts[1].replace(/[<\>\-]/g, "").trim());
-            varHeader = sanitizeText(pParts[2].replace(/[<\>\-]/g, "").trim()) || "Cost Variance";
+            // pParts[0] contains the element column space and the P1 banner
+            const p1Match = pParts[0].match(/<\s*([^>]+)\s*>/);
+            if (p1Match) p1Header = sanitizeText(p1Match[1]);
+            else p1Header = sanitizeText(pParts[0].replace(/[<\>\-]/g, "").trim());
+
+            const p2Match = pParts[1].match(/<\s*([^>]+)\s*>/);
+            if (p2Match) p2Header = sanitizeText(p2Match[1]);
+            else p2Header = sanitizeText(pParts[1].replace(/[<\>\-]/g, "").trim());
+
+            const varMatch = pParts[2].match(/<\s*([^>]+)\s*>/);
+            if (varMatch) varHeader = sanitizeText(varMatch[1].replace(/[\-]+/g, " ").trim()) || "Cost Variance";
+            else varHeader = sanitizeText(pParts[2].replace(/[<\>\-]/g, "").trim()) || "Cost Variance";
           }
           continue;
         }
@@ -1417,8 +1427,8 @@
         ];
 
         // 2-level header:
-        // Row 2: ["", p1Header, "", "", "", p2Header, "", "", "", varHeader, "", "", ""]
-        // Row 3: varDataHeaders
+        // Row 2 (index 2): ["", p1Header, "", "", "", p2Header, "", "", "", varHeader, "", "", ""]
+        // Row 3 (index 3): varDataHeaders
         const periodHeaderRow = [
           "",
           p1Header || "Period 1", "", "", "",
@@ -1428,18 +1438,21 @@
 
         const allRows = [...infoRows, periodHeaderRow, varDataHeaders, ...rows];
 
-        // Merges for the period banner header row (row index 2)
+        // Merges for the period banner header row (row index 2):
+        // Col 1..4 (B..E) -> Period 1
+        // Col 5..8 (F..I) -> Period 2
+        // Col 9..12 (J..M) -> Cost Variance
         const merges = [
-          { s: { r: 2, c: 1 }, e: { r: 2, c: 4 } },  // P1 banner
-          { s: { r: 2, c: 5 }, e: { r: 2, c: 8 } },  // P2 banner
-          { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } }  // Variance banner
+          { s: { r: 2, c: 1 }, e: { r: 2, c: 4 } },
+          { s: { r: 2, c: 5 }, e: { r: 2, c: 8 } },
+          { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } }
         ];
 
         sheets.push({
           name: `CC_${cc}`.substring(0, 31),
           headers: [],
           rows: allRows,
-          infoRowCount: 2,
+          infoRowCount: 3,  // rows 0,1 are info/blank, row 2 is period banner, row 3 is column header
           merges: merges
         });
       }

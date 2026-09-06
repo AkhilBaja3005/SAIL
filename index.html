@@ -1327,7 +1327,9 @@
       ];
 
       const ccMap = new Map();
+      const ccInfoMap = new Map();
       let curCC = "", curCCName = "", curPeriod = "";
+      let p1Header = "", p2Header = "", varHeader = "Cost Variance";
 
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i].replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
@@ -1342,7 +1344,21 @@
         if (ccMatch) {
           curCC = sanitizeText(ccMatch[1]);
           curCCName = sanitizeText(ccMatch[2]).replace(/page.*/i, "").trim();
+          // Remove trailing "CC NAME :" or extra prefixes if present
+          curCCName = curCCName.replace(/^CC\s*NAME\s*:\s*/i, "").trim();
           if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          ccInfoMap.set(curCC, { ccName: curCCName, period: curPeriod });
+          continue;
+        }
+
+        // Detect period headers like < Monthly 06-2026 > || < Monthly 07-2026 > || <----- Cost Variance ----->
+        if (line.includes("<") && line.includes(">") && line.includes("||")) {
+          const pParts = line.split("||");
+          if (pParts.length >= 3) {
+            p1Header = sanitizeText(pParts[0].replace(/[<\>\-]/g, "").trim());
+            p2Header = sanitizeText(pParts[1].replace(/[<\>\-]/g, "").trim());
+            varHeader = sanitizeText(pParts[2].replace(/[<\>\-]/g, "").trim()) || "Cost Variance";
+          }
           continue;
         }
 
@@ -1358,7 +1374,10 @@
             const p1Vals = [p1.slice(0, 8), p1.slice(8, 17), p1.slice(17, 24), p1.slice(24, 32)].map(s => cleanNumber(s));
             const p2Vals = [p2.slice(0, 8), p2.slice(8, 17), p2.slice(17, 24), p2.slice(24, 32)].map(s => cleanNumber(s));
             const varVals = [p3.slice(0, 10), p3.slice(10, 20), p3.slice(20, 29), p3.slice(29, 38)].map(s => cleanNumber(s));
-            if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+            if (!ccMap.has(curCC)) {
+              ccMap.set(curCC, []);
+              ccInfoMap.set(curCC, { ccName: curCCName, period: curPeriod });
+            }
             ccMap.get(curCC).push([rawName, ...p1Vals, ...p2Vals, ...varVals]);
           }
         } else if (/^(CUM\.?\s*COST|STOCK\s*COST|TOTAL\s*COST)/i.test(line.trim())) {
@@ -1381,19 +1400,48 @@
           const p2Vals = extractTokens(p2Part);
           const varVals = extractTokens(varPart);
 
-          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          if (!ccMap.has(curCC)) {
+            ccMap.set(curCC, []);
+            ccInfoMap.set(curCC, { ccName: curCCName, period: curPeriod });
+          }
           ccMap.get(curCC).push([rawName, ...p1Vals, ...p2Vals, ...varVals]);
         }
       }
 
       const sheets = [];
       for (const [cc, rows] of ccMap.entries()) {
+        const info = ccInfoMap.get(cc) || { ccName: curCCName, period: curPeriod };
         const infoRows = [
-          [`CC Code: ${cc}`, `CC Name: ${curCCName}`, `Period: ${curPeriod}`],
+          [`CC Code: ${cc}`, `CC Name: ${info.ccName || ""}`, `Period: ${info.period || ""}`],
           []
         ];
-        const allRows = [...infoRows, varDataHeaders, ...rows];
-        sheets.push({ name: `CC_${cc}`.substring(0, 31), headers: [], rows: allRows, infoRowCount: 2 });
+
+        // 2-level header:
+        // Row 2: ["", p1Header, "", "", "", p2Header, "", "", "", varHeader, "", "", ""]
+        // Row 3: varDataHeaders
+        const periodHeaderRow = [
+          "",
+          p1Header || "Period 1", "", "", "",
+          p2Header || "Period 2", "", "", "",
+          varHeader || "Cost Variance", "", "", ""
+        ];
+
+        const allRows = [...infoRows, periodHeaderRow, varDataHeaders, ...rows];
+
+        // Merges for the period banner header row (row index 2)
+        const merges = [
+          { s: { r: 2, c: 1 }, e: { r: 2, c: 4 } },  // P1 banner
+          { s: { r: 2, c: 5 }, e: { r: 2, c: 8 } },  // P2 banner
+          { s: { r: 2, c: 9 }, e: { r: 2, c: 12 } }  // Variance banner
+        ];
+
+        sheets.push({
+          name: `CC_${cc}`.substring(0, 31),
+          headers: [],
+          rows: allRows,
+          infoRowCount: 2,
+          merges: merges
+        });
       }
       return { sheets: sheets.length > 0 ? sheets : [{ name: "Cost_Variance", headers: varDataHeaders, rows: [], infoRowCount: 0 }] };
     }
@@ -1617,6 +1665,10 @@
         // Auto-filter on header row
         ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: headerRowIdx, c: 0 }, e: { r: R - 1, c: C - 1 } }) };
         ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: R - 1, c: C - 1 } });
+
+        if (sheetDef.merges && sheetDef.merges.length > 0) {
+          ws["!merges"] = sheetDef.merges;
+        }
 
         let safeName = sheetDef.name.replace(/[\\\/\?\*\[\]\:]/g, "_").substring(0, 31);
         if (!safeName) safeName = "Sheet1";

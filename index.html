@@ -1361,6 +1361,28 @@
             if (!ccMap.has(curCC)) ccMap.set(curCC, []);
             ccMap.get(curCC).push([rawName, ...p1Vals, ...p2Vals, ...varVals]);
           }
+        } else if (/^(CUM\.?\s*COST|STOCK\s*COST|TOTAL\s*COST)/i.test(line.trim())) {
+          // Bottom summary rows that do not have || separators (e.g. CUM. COST, STOCK COST, TOTAL COST)
+          const rawName = sanitizeText(line.slice(0, 36).trim().replace(/^[\=\@\*\+]+/, "").trim());
+          const rest = line.slice(36);
+          // Split numeric tokens from the 3 sections
+          const p1Part = rest.slice(0, 34).padEnd(34);
+          const p2Part = rest.slice(34, 68).padEnd(34);
+          const varPart = rest.slice(68).padEnd(40);
+
+          // In summary lines: typically V-Cost and F-Cost (or 2-4 numbers per section)
+          const extractTokens = (str) => {
+            const tokens = str.trim().split(/\s+/).filter(Boolean).map(s => cleanNumber(s));
+            while (tokens.length < 4) tokens.unshift(""); // Align numbers to cost columns
+            return tokens.slice(-4);
+          };
+
+          const p1Vals = extractTokens(p1Part);
+          const p2Vals = extractTokens(p2Part);
+          const varVals = extractTokens(varPart);
+
+          if (!ccMap.has(curCC)) ccMap.set(curCC, []);
+          ccMap.get(curCC).push([rawName, ...p1Vals, ...p2Vals, ...varVals]);
         }
       }
 
